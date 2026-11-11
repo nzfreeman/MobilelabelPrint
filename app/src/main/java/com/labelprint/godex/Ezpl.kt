@@ -90,6 +90,83 @@ object Ezpl {
         return t.copy(area = area)
     }
 
+    // ───── 직접 입력한 인쇄 영역 ─────
+
+    private fun round1(v: Float): Float = Math.round(v * 10f) / 10f
+
+    /** 디자인 기준 가로·세로(mm)와 먼저 나오는 쪽으로 프린터 기준 폭·길이를 정한다. */
+    fun withDesignSize(t: LabelTemplate, w: Float, h: Float, rotation: Int = t.rotation): LabelTemplate =
+        if (rotation % 180 != 0) t.copy(rotation = rotation, lengthMm = w, widthMm = h)
+        else t.copy(rotation = rotation, widthMm = w, lengthMm = h)
+
+    /** 새 영역: 마지막 영역 바로 아래(없으면 왼쪽 위)에 라벨 안에 들어가는 크기로 둔다. */
+    fun newArea(t: LabelTemplate): PrintArea {
+        val (dw, dh) = designSize(t)
+        val w = minOf(30f, maxOf(1f, dw - 4f))
+        val h = minOf(10f, maxOf(1f, dh - 4f))
+        val last = t.areas.lastOrNull()
+        val y = if (last == null) 2f else last.yMm + last.hMm + 2f
+        return PrintArea(
+            xMm = minOf(2f, maxOf(0f, dw - w)), yMm = round1(y.coerceIn(0f, maxOf(0f, dh - h))),
+            wMm = round1(w), hMm = round1(h),
+            text = if (last == null) DEFAULT_AREA_TEXT else "",
+        )
+    }
+
+    /** 예전(사진 기준) 설정을 mm 영역 하나로 옮긴다. */
+    fun legacyAreas(t: LabelTemplate): List<PrintArea> {
+        val (dw, dh) = designSize(t)
+        val a = areaInLabel(t)
+        val o = t.options
+        val text = if (t.blank) t.textTemplate else lines(o, "{BATCH}", "{MFG}", "{BB}").joinToString("\n")
+        return listOf(
+            PrintArea(
+                xMm = round1(a.l * dw), yMm = round1(a.t * dh), wMm = round1(a.w * dw), hMm = round1(a.h * dh),
+                text = text, fontPt = o.fontPt, bold = o.bold, centered = o.centered,
+            )
+        )
+    }
+
+    /** 영역에 찍을 줄들. 찍을 글자가 없으면 빈 목록. */
+    fun areaLines(a: PrintArea, batch: String, mfg: String, bb: String): List<String> {
+        if (a.text.isBlank()) return emptyList()
+        val out = templateLines(a.text, batch, mfg, bb)
+        return if (out.any { it.isNotBlank() }) out else emptyList()
+    }
+
+    /** 어느 영역이든 {key} 자리를 쓰는지. key는 batch, mfg, bb. */
+    fun uses(t: LabelTemplate, key: String): Boolean =
+        t.areas.any { it.text.contains("{$key}", ignoreCase = true) }
+
+    /** 영역이 라벨 안에 들어가는지 확인한다. 문제가 없으면 null. */
+    fun areaProblem(t: LabelTemplate, a: PrintArea): String? {
+        val (dw, dh) = designSize(t)
+        val over = 0.05f
+        return when {
+            a.wMm <= 0f || a.hMm <= 0f -> "영역의 가로·세로는 0보다 커야 합니다."
+            a.xMm < 0f || a.yMm < 0f -> "위치는 0 이상이어야 합니다."
+            a.xMm + a.wMm > dw + over ->
+                "영역이 라벨 오른쪽 밖으로 ${round1(a.xMm + a.wMm - dw)} mm 나갑니다 (라벨 가로 ${round1(dw)} mm)."
+            a.yMm + a.hMm > dh + over ->
+                "영역이 라벨 아래쪽 밖으로 ${round1(a.yMm + a.hMm - dh)} mm 나갑니다 (라벨 세로 ${round1(dh)} mm)."
+            else -> null
+        }
+    }
+
+    /** 프린터 좌표계(dot)에서 영역의 위치와 크기. */
+    fun areaPlacement(t: LabelTemplate, a: PrintArea, dpi: Int): Placement {
+        val (dw, dh) = designSize(t)
+        val r = rotateRect(
+            NRect(a.xMm / dw, a.yMm / dh, (a.xMm + a.wMm) / dw, (a.yMm + a.hMm) / dh).normalized(), t.rotation,
+        )
+        val wd = dots(t.widthMm, dpi)
+        val ld = dots(t.lengthMm, dpi)
+        return Placement(
+            (r.l * wd).roundToInt(), (r.t * ld).roundToInt(),
+            (r.w * wd).roundToInt().coerceAtLeast(8), (r.h * ld).roundToInt().coerceAtLeast(8),
+        )
+    }
+
     /** 사진을 시계 방향으로 deg만큼 돌렸을 때의 좌표. */
     fun rotateRect(r: NRect, deg: Int): NRect = when (((deg % 360) + 360) % 360) {
         90 -> NRect(1 - r.b, r.l, 1 - r.t, r.r)
@@ -137,11 +214,16 @@ object Ezpl {
         return out to wb
     }
 
-    /** 라벨 한 종류를 count장 인쇄하는 작업 데이터. */
+    /** 프린터 좌표 (x, y)에 찍을 1bpp 그림 하나. */
+    class Graphic(val x: Int, val y: Int, val data: ByteArray, val widthBytes: Int, val height: Int)
+
     fun job(
         t: LabelTemplate, s: PrinterSettings, x: Int, y: Int,
         data: ByteArray, widthBytes: Int, height: Int, count: Int,
-    ): ByteArray {
+    ): ByteArray = job(t, s, listOf(Graphic(x, y, data, widthBytes, height)), count)
+
+    /** 라벨 한 종류를 count장 인쇄하는 작업 데이터. 영역마다 그림 하나씩 넣는다. */
+    fun job(t: LabelTemplate, s: PrinterSettings, graphics: List<Graphic>, count: Int): ByteArray {
         val head = buildString {
             append("^Q${fmt(t.lengthMm)},${fmt(t.gapMm)}\r\n")
             append("^W${fmt(t.widthMm)}\r\n")
@@ -153,12 +235,15 @@ object Ezpl {
             append("^R${s.leftMargin.coerceIn(0, 399)}\r\n")
             if (s.stopPosition >= 0) append("^E${s.stopPosition}\r\n")
             append("^L\r\n")
-            append("Q$x,$y,$widthBytes,$height\r\n")
         }
         val bos = ByteArrayOutputStream()
         bos.write(head.toByteArray(Charsets.US_ASCII))
-        bos.write(data)
-        bos.write("\r\nE\r\n".toByteArray(Charsets.US_ASCII))
+        for (g in graphics) {
+            bos.write("Q${g.x},${g.y},${g.widthBytes},${g.height}\r\n".toByteArray(Charsets.US_ASCII))
+            bos.write(g.data)
+            bos.write("\r\n".toByteArray(Charsets.US_ASCII))
+        }
+        bos.write("E\r\n".toByteArray(Charsets.US_ASCII))
         return bos.toByteArray()
     }
 

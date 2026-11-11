@@ -66,6 +66,27 @@ Store Below 20 degrees
 Product of New Zealand
 """.trim()
 
+/** 라벨 하나에 둘 수 있는 인쇄 영역 수. */
+const val MAX_AREAS = 4
+
+val DEFAULT_AREA_TEXT = "Batch: {BATCH}\nBest Before: {BB}"
+
+/**
+ * 인쇄 영역 하나. 위치와 크기는 라벨을 바로 놓고 본 방향에서 왼쪽 위 모서리 기준 mm.
+ * text의 {BATCH}, {MFG}, {BB} 자리에 입력값이 들어간다.
+ */
+data class PrintArea(
+    val xMm: Float = 5f,
+    val yMm: Float = 5f,
+    val wMm: Float = 30f,
+    val hMm: Float = 10f,
+    val text: String = DEFAULT_AREA_TEXT,
+    /** 0이면 영역에 맞춰 자동. */
+    val fontPt: Float = 0f,
+    val bold: Boolean = true,
+    val centered: Boolean = false,
+)
+
 data class LabelTemplate(
     val id: String,
     val name: String,
@@ -96,6 +117,8 @@ data class LabelTemplate(
     /** 무지 라벨 문구. {BATCH}, {MFG}, {BB} 자리에 입력값이 들어간다. */
     val textTemplate: String = DEFAULT_TEXT_TEMPLATE,
     val options: PrintOptions = PrintOptions(),
+    /** 직접 입력한 인쇄 영역들. 인쇄는 이 값만 쓴다(사진·outline·area는 예전 저장값을 옮길 때만 읽는다). */
+    val areas: List<PrintArea> = emptyList(),
 )
 
 data class PrinterSettings(

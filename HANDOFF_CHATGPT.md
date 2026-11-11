@@ -2,6 +2,18 @@
 
 아래 내용을 읽고 이 안드로이드 앱을 이어서 수정해 주세요. 답변과 앱 안의 문구는 한국어로 써 주세요.
 
+## 0. 최신 상태 (v1.2, 이 절이 아래 내용보다 우선)
+
+- **버전 관리는 GitHub**: https://github.com/nzfreeman/MobilelabelPrint (`main` 브랜치, 버전마다 `vX.Y` 태그). 빌드 결과물, APK, `local.properties`는 `.gitignore`로 제외.
+- **v1.2에서 사진 기반 영역 설정을 없애고 수동 입력으로 바꿈.**
+  - 라벨 설정(`EditScreen.kt`): 라벨 가로·세로·간격(mm), 프린터에서 먼저 나오는 쪽, 인쇄 영역 개수(1~4), 영역마다 왼쪽·위에서의 위치와 가로·세로(mm), 인쇄할 내용, 글자 크기(pt), 굵게, 가운데 정렬.
+  - 모델: `PrintArea`(xMm, yMm, wMm, hMm, text, fontPt, bold, centered), `LabelTemplate.areas`. 내용의 `{BATCH}`, `{MFG}`, `{BB}`가 입력값으로 바뀜. MFG가 비면 `{MFG}`가 있는 줄은 빠짐.
+  - 인쇄: `Imaging.buildJob`이 영역마다 비트맵을 그려 EZPL `Q` 그래픽을 하나씩 넣음(`Ezpl.areaPlacement`, `Ezpl.job(graphics)`).
+  - 미리보기: `Imaging.previewLabel`이 입력한 크기의 흰 라벨 위에 영역(빨간 사각형)과 글자를 그림.
+  - 목록·인쇄 화면은 `PrintScreen.kt`로 옮김. 사진 촬영/갤러리/드라이브 라벨 가져오기 버튼과 `fitArea`(영역 자동 확대)는 삭제. 지정한 pt가 영역보다 크면 줄이고 경고를 보여 줌.
+  - 예전에 저장한 라벨은 불러올 때 `Ezpl.legacyAreas`로 mm 영역 하나로 자동 변환.
+- **아직 확인 안 된 것**: v1.2는 빌드와 단위 테스트만 통과했고 실제 폰·프린터에서는 찍어 보지 않음. "인쇄 도중 멈춤"의 원인도 확정되지 않음(7번 참고). 멈출 때 프린터 LED 색과 앱에 뜨는 문구를 사용자에게 받아야 함.
+
 ## 1. 앱이 하는 일
 
 꿀 제품 라벨에 **배치번호, Best Before, MFG Date**를 덧인쇄하는 안드로이드 앱입니다.

@@ -2,6 +2,9 @@ package com.labelprint.godex
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -114,6 +117,47 @@ class EzplTest {
         val text = String(job, Charsets.ISO_8859_1)
         assertTrue(text.startsWith("^Q143,3\r\n^W47\r\n^H12\r\n^P5\r\n^S4\r\n^AD\r\n^C1\r\n^R0\r\n^L\r\nQ10,20,2,2\r\n"))
         assertTrue(text.endsWith("\u0001\u0002\u0003\u0004\r\nE\r\n"))
+    }
+
+    @Test
+    fun manualAreaPlacementFollowsRotation() {
+        // 143 x 47 mm label, left edge comes out first (rotation 90): printer width 47, length 143
+        val t = Ezpl.withDesignSize(LabelTemplate(id = "a", name = "a", imagePath = ""), 143f, 47f, 90)
+        assertEquals(47f, t.widthMm, 0.001f)
+        assertEquals(143f, t.lengthMm, 0.001f)
+        val a = PrintArea(xMm = 100f, yMm = 30f, wMm = 30f, hMm = 10f)
+        assertNull(Ezpl.areaProblem(t, a))
+        val p = Ezpl.areaPlacement(t, a, 300)
+        // design height 10 mm lies along the printer width, design width 30 mm along the feed
+        assertEquals(Ezpl.dots(10f, 300).toFloat(), p.w.toFloat(), 2f)
+        assertEquals(Ezpl.dots(30f, 300).toFloat(), p.h.toFloat(), 2f)
+        assertEquals(Ezpl.dots(7f, 300).toFloat(), p.x.toFloat(), 2f)     // 47 - 30 - 10
+        assertEquals(Ezpl.dots(100f, 300).toFloat(), p.y.toFloat(), 2f)
+        assertNotNull(Ezpl.areaProblem(t, a.copy(xMm = 120f)))
+        assertNotNull(Ezpl.areaProblem(t, a.copy(hMm = 20f)))
+    }
+
+    @Test
+    fun legacyTemplateBecomesOneMmArea() {
+        val t = LabelTemplate(id = "a", name = "a", imagePath = "", rotation = 0, area = NRect(0.5f, 0.5f, 1f, 1f))
+        val a = Ezpl.legacyAreas(t).single()
+        assertEquals(23.5f, a.xMm, 0.06f)
+        assertEquals(71.5f, a.yMm, 0.06f)
+        assertEquals(listOf("Batch: QB1", "Best Before: 2030"), Ezpl.areaLines(a, "QB1", "", "2030"))
+        assertTrue(Ezpl.uses(t.copy(areas = listOf(a)), "bb"))
+        assertFalse(Ezpl.uses(t.copy(areas = listOf(a)), "mfg"))
+        assertEquals(emptyList<String>(), Ezpl.areaLines(a.copy(text = "  \n"), "x", "y", "z"))
+    }
+
+    @Test
+    fun jobWithTwoAreasHasTwoGraphics() {
+        val t = LabelTemplate(id = "a", name = "a", imagePath = "")
+        val job = Ezpl.job(
+            t, PrinterSettings(),
+            listOf(Ezpl.Graphic(1, 2, byteArrayOf(9), 1, 1), Ezpl.Graphic(3, 4, byteArrayOf(8), 1, 1)), 1,
+        )
+        val text = String(job, Charsets.ISO_8859_1)
+        assertTrue(text.contains("^L\r\nQ1,2,1,1\r\n\u0009\r\nQ3,4,1,1\r\n\u0008\r\nE\r\n"))
     }
 
     @Test

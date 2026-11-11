@@ -85,6 +85,15 @@ class Store(context: Context) {
             .put("marginRight", t.marginRight.toDouble()).put("marginBottom", t.marginBottom.toDouble())
             .put("anchorRight", t.anchorRight).put("anchorBottom", t.anchorBottom)
             .put("blank", t.blank).put("textTemplate", t.textTemplate)
+            .put("areas", JSONArray().also { arr ->
+                t.areas.forEach { a ->
+                    arr.put(JSONObject()
+                        .put("x", a.xMm.toDouble()).put("y", a.yMm.toDouble())
+                        .put("w", a.wMm.toDouble()).put("h", a.hMm.toDouble())
+                        .put("text", a.text).put("fontPt", a.fontPt.toDouble())
+                        .put("bold", a.bold).put("centered", a.centered))
+                }
+            })
             .put("options", JSONObject()
                 .put("batchPrefix", o.batchPrefix).put("bbPrefix", o.bbPrefix).put("bbStyle", o.bbStyle)
                 .put("printMfg", o.printMfg).put("mfgPrefix", o.mfgPrefix).put("vertical", o.vertical)
@@ -97,7 +106,7 @@ class Store(context: Context) {
         val d = LabelTemplate(id = "", name = "", imagePath = "")
         val oj = j.optJSONObject("options") ?: JSONObject()
         val od = PrintOptions()
-        return LabelTemplate(
+        val loaded = LabelTemplate(
             id = j.getString("id"),
             name = j.optString("name"),
             imagePath = j.optString("imagePath"),
@@ -134,5 +143,17 @@ class Store(context: Context) {
                 letterSpacing = oj.optDouble("letterSpacing", od.letterSpacing.toDouble()).toFloat(),
             ),
         )
+        // 직접 입력한 영역이 없으면(예전 버전에서 저장한 라벨) 사진 기준 영역을 mm 영역으로 옮긴다.
+        val arr = j.optJSONArray("areas")
+        val areas = if (arr == null) Ezpl.legacyAreas(loaded) else (0 until arr.length()).map { arr.getJSONObject(it) }.map {
+            val d0 = PrintArea()
+            PrintArea(
+                xMm = it.optDouble("x", d0.xMm.toDouble()).toFloat(), yMm = it.optDouble("y", d0.yMm.toDouble()).toFloat(),
+                wMm = it.optDouble("w", d0.wMm.toDouble()).toFloat(), hMm = it.optDouble("h", d0.hMm.toDouble()).toFloat(),
+                text = it.optString("text", ""), fontPt = it.optDouble("fontPt", 0.0).toFloat(),
+                bold = it.optBoolean("bold", true), centered = it.optBoolean("centered", false),
+            )
+        }
+        return loaded.copy(areas = areas)
     }
 }
