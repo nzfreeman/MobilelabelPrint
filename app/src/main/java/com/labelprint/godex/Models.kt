@@ -21,6 +21,9 @@ data class NRect(val l: Float, val t: Float, val r: Float, val b: Float) {
 /** Best Before 머리말 표기. */
 val BB_STYLES = listOf("Best Before", "B.B", "BB")
 
+/** MFG Date 머리말 표기. */
+val MFG_STYLES = listOf("MFG Date", "MFG")
+
 /** 줄 순서. */
 const val ORDER_BATCH_FIRST = 0 // Batch, MFG, BB
 const val ORDER_BATCH_LAST = 1  // MFG, BB, Batch
@@ -31,6 +34,7 @@ data class PrintOptions(
     val bbStyle: String = "Best Before",
     val printMfg: Boolean = false,
     val mfgPrefix: Boolean = true,
+    val mfgStyle: String = "MFG Date",
     val vertical: Boolean = true,
     val order: Int = ORDER_BATCH_FIRST,
     val bold: Boolean = true,
@@ -69,7 +73,7 @@ Product of New Zealand
 /** 라벨 하나에 둘 수 있는 인쇄 영역 수. */
 const val MAX_AREAS = 4
 
-val DEFAULT_AREA_TEXT = "Batch: {BATCH}\nBest Before: {BB}"
+val DEFAULT_AREA_TEXT = "{BATCH}\n{BB}"
 
 /**
  * 인쇄 영역 하나. 위치와 크기는 라벨을 바로 놓고 본 방향에서 왼쪽 위 모서리 기준 mm.

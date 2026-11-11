@@ -109,7 +109,7 @@ class Store(context: Context) {
             .put("marginLeft", t.marginLeft.toDouble()).put("marginTop", t.marginTop.toDouble())
             .put("marginRight", t.marginRight.toDouble()).put("marginBottom", t.marginBottom.toDouble())
             .put("anchorRight", t.anchorRight).put("anchorBottom", t.anchorBottom)
-            .put("blank", t.blank).put("textTemplate", t.textTemplate)
+            .put("blank", t.blank).put("textTemplate", t.textTemplate).put("tplV", 2)
             .put("areas", JSONArray().also { arr ->
                 t.areas.forEach { a ->
                     arr.put(JSONObject()
@@ -121,7 +121,7 @@ class Store(context: Context) {
             })
             .put("options", JSONObject()
                 .put("batchPrefix", o.batchPrefix).put("bbPrefix", o.bbPrefix).put("bbStyle", o.bbStyle)
-                .put("printMfg", o.printMfg).put("mfgPrefix", o.mfgPrefix).put("vertical", o.vertical)
+                .put("printMfg", o.printMfg).put("mfgPrefix", o.mfgPrefix).put("mfgStyle", o.mfgStyle).put("vertical", o.vertical)
                 .put("order", o.order).put("bold", o.bold).put("centered", o.centered)
                 .put("fontPt", o.fontPt.toDouble()).put("dateFormat", o.dateFormat)
                 .put("bbKind", o.bbKind).put("fontFamily", o.fontFamily).put("letterSpacing", o.letterSpacing.toDouble()))
@@ -157,6 +157,7 @@ class Store(context: Context) {
                 bbStyle = oj.optString("bbStyle", od.bbStyle),
                 printMfg = oj.optBoolean("printMfg", od.printMfg),
                 mfgPrefix = oj.optBoolean("mfgPrefix", od.mfgPrefix),
+                mfgStyle = oj.optString("mfgStyle", od.mfgStyle),
                 vertical = oj.optBoolean("vertical", od.vertical),
                 order = oj.optInt("order", od.order),
                 bold = oj.optBoolean("bold", od.bold),
@@ -179,6 +180,9 @@ class Store(context: Context) {
                 bold = it.optBoolean("bold", true), centered = it.optBoolean("centered", false),
             )
         }
-        return loaded.copy(areas = areas)
+        val withAreas = loaded.copy(areas = areas)
+        // v1.3까지는 머리말을 문구에 글자로 적었다. 한 번만 켜고 끄는 설정으로 옮긴다.
+        val typedPrefixes = j.optInt("tplV", 0) < 2 && (arr != null || loaded.blank)
+        return if (typedPrefixes) Ezpl.migratePrefixes(withAreas) else withAreas
     }
 }

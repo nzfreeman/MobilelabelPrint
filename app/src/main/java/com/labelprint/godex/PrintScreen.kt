@@ -339,6 +339,18 @@ internal fun PrintScreen(
             mfg = SheetData.formatDate(mfg, it)
         }
 
+        Section("머리말 (값 앞에 붙는 글자)")
+        if (needBatch) Check("\"Batch: \" 인쇄", o.batchPrefix) { setOptions(o.copy(batchPrefix = it)) }
+        if (needBb) {
+            Check("Best Before 머리말 인쇄", o.bbPrefix) { setOptions(o.copy(bbPrefix = it)) }
+            if (o.bbPrefix) Chips(BB_STYLES.map { it to "$it:" }, o.bbStyle) { setOptions(o.copy(bbStyle = it)) }
+        }
+        if (needMfg) {
+            Check("MFG 머리말 인쇄", o.mfgPrefix) { setOptions(o.copy(mfgPrefix = it)) }
+            if (o.mfgPrefix) Chips(MFG_STYLES.map { it to "$it:" }, o.mfgStyle) { setOptions(o.copy(mfgStyle = it)) }
+        }
+        Text("끄면 값만 인쇄합니다. 예: 켜면 \"Batch: QB0000\", 끄면 \"QB0000\".", style = MaterialTheme.typography.bodySmall)
+
         Section("글자")
         Chips(FONT_FAMILIES, o.fontFamily) { setOptions(o.copy(fontFamily = it)) }
         Text("자간 ${Math.round(o.letterSpacing * 100)}%")
@@ -391,7 +403,7 @@ internal fun PrintScreen(
                     message = withContext(Dispatchers.IO) {
                         try {
                             val overflow = t.areas.indices.firstOrNull { i ->
-                                val lines = Ezpl.areaLines(t.areas[i], batch, mfg, bb)
+                                val lines = Ezpl.areaLines(t.areas[i], batch, mfg, bb, o)
                                 lines.isNotEmpty() && !Imaging.renderArea(t, t.areas[i], lines, settings.dpi).fits
                             }
                             val st = PrinterClient.status(settings)

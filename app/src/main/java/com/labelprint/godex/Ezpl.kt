@@ -23,16 +23,19 @@ object Ezpl {
      * 무지 라벨 문구를 줄 단위로 만든다. {BATCH}, {MFG}, {BB} 자리에 값을 넣고,
      * MFG 값이 비어 있으면 {MFG}가 들어 있는 줄은 통째로 뺀다.
      */
-    fun templateLines(template: String, batch: String, mfg: String, bb: String): List<String> {
+    fun templateLines(
+        template: String, batch: String, mfg: String, bb: String, o: PrintOptions? = null,
+    ): List<String> {
         val ph = Regex("\\{(batch|mfg|bb)\\}", RegexOption.IGNORE_CASE)
         return template.replace("\r", "").trim('\n').split('\n')
             .filter { line -> mfg.isNotBlank() || !line.contains("{mfg}", ignoreCase = true) }
             .map { line ->
                 ph.replace(line) { m ->
                     when (m.groupValues[1].lowercase()) {
-                        "batch" -> batch.trim()
-                        "mfg" -> mfg.trim()
-                        else -> bb.trim()
+                        // o가 있으면 설정에 따라 값 앞에 머리말을 붙인다.
+                        "batch" -> (if (o?.batchPrefix == true) "Batch: " else "") + batch.trim()
+                        "mfg" -> (if (o?.mfgPrefix == true) "${o.mfgStyle}: " else "") + mfg.trim()
+                        else -> (if (o?.bbPrefix == true) "${o.bbStyle}: " else "") + bb.trim()
                     }
                 }.trimEnd()
             }
@@ -118,7 +121,9 @@ object Ezpl {
         val (dw, dh) = designSize(t)
         val a = areaInLabel(t)
         val o = t.options
-        val text = if (t.blank) t.textTemplate else lines(o, "{BATCH}", "{MFG}", "{BB}").joinToString("\n")
+        // 머리말은 글자로 넣지 않고 options의 켜고 끄기 설정으로 붙인다.
+        val bare = o.copy(batchPrefix = false, bbPrefix = false, mfgPrefix = false)
+        val text = if (t.blank) t.textTemplate else lines(bare, "{BATCH}", "{MFG}", "{BB}").joinToString("\n")
         return listOf(
             PrintArea(
                 xMm = round1(a.l * dw), yMm = round1(a.t * dh), wMm = round1(a.w * dw), hMm = round1(a.h * dh),
@@ -128,10 +133,52 @@ object Ezpl {
     }
 
     /** 영역에 찍을 줄들. 찍을 글자가 없으면 빈 목록. */
-    fun areaLines(a: PrintArea, batch: String, mfg: String, bb: String): List<String> {
+    fun areaLines(a: PrintArea, batch: String, mfg: String, bb: String, o: PrintOptions): List<String> {
         if (a.text.isBlank()) return emptyList()
-        val out = templateLines(a.text, batch, mfg, bb)
+        val out = templateLines(a.text, batch, mfg, bb, o)
         return if (out.any { it.isNotBlank() }) out else emptyList()
+    }
+
+    private val PREFIX_RE = Regex(
+        "(batch|best\\s*before|b\\.?\\s*b\\.?|mfg(?:\\s*date)?)\\s*:\\s*(?=\\{(batch|bb|mfg)\\})",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /**
+     * 예전 버전에서 문구에 글자로 적어 둔 머리말("Batch: {BATCH}")을 켜고 끄는 설정으로 옮긴다.
+     * 알아본 머리말은 문구에서 빼고 설정을 켠다. 값 자리는 있는데 알아본 머리말이 없으면 설정을 꺼서
+     * 인쇄 결과가 예전과 같게 한다.
+     */
+    fun migratePrefixes(t: LabelTemplate): LabelTemplate {
+        var o = t.options
+        val found = HashSet<String>()
+        val areas = t.areas.map { a ->
+            a.copy(text = PREFIX_RE.replace(a.text) { m ->
+                val word = m.groupValues[1]
+                val key = m.groupValues[2].lowercase()
+                found += key
+                if (key == "bb") {
+                    o = o.copy(
+                        bbStyle = when {
+                            word.contains("before", ignoreCase = true) -> "Best Before"
+                            word.contains(".") -> "B.B"
+                            else -> "BB"
+                        }
+                    )
+                } else if (key == "mfg") {
+                    o = o.copy(mfgStyle = if (word.contains("date", ignoreCase = true)) "MFG Date" else "MFG")
+                }
+                ""
+            })
+        }
+        val out = t.copy(areas = areas)
+        return out.copy(
+            options = o.copy(
+                batchPrefix = if (uses(out, "batch")) "batch" in found else o.batchPrefix,
+                bbPrefix = if (uses(out, "bb")) "bb" in found else o.bbPrefix,
+                mfgPrefix = if (uses(out, "mfg")) "mfg" in found else o.mfgPrefix,
+            )
+        )
     }
 
     /** 어느 영역이든 {key} 자리를 쓰는지. key는 batch, mfg, bb. */

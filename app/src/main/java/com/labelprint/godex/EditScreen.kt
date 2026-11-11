@@ -182,7 +182,8 @@ internal fun EditScreen(
         }
         Text(
             "내용 안의 {BATCH}, {MFG}, {BB} 자리에는 인쇄 화면에서 입력한 배치번호, MFG Date, Best Before가 들어갑니다. " +
-                "예: Batch: {BATCH}  ·  MFG Date를 비우면 {MFG}가 있는 줄은 인쇄하지 않습니다. 고정 문구만 넣어도 됩니다.",
+                "\"Batch:\", \"Best Before:\", \"MFG:\" 같은 머리말은 여기에 적지 말고 인쇄 화면의 '머리말'에서 켜고 끄세요. " +
+                "MFG Date를 비우면 {MFG}가 있는 줄은 인쇄하지 않습니다. 고정 문구만 넣어도 됩니다.",
             style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp),
         )
 

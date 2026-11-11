@@ -143,10 +143,35 @@ class EzplTest {
         val a = Ezpl.legacyAreas(t).single()
         assertEquals(23.5f, a.xMm, 0.06f)
         assertEquals(71.5f, a.yMm, 0.06f)
-        assertEquals(listOf("Batch: QB1", "Best Before: 2030"), Ezpl.areaLines(a, "QB1", "", "2030"))
+        assertEquals(listOf("Batch: QB1", "Best Before: 2030"), Ezpl.areaLines(a, "QB1", "", "2030", t.options))
         assertTrue(Ezpl.uses(t.copy(areas = listOf(a)), "bb"))
         assertFalse(Ezpl.uses(t.copy(areas = listOf(a)), "mfg"))
-        assertEquals(emptyList<String>(), Ezpl.areaLines(a.copy(text = "  \n"), "x", "y", "z"))
+        assertEquals(emptyList<String>(), Ezpl.areaLines(a.copy(text = "  \n"), "x", "y", "z", t.options))
+    }
+
+    @Test
+    fun prefixesCanBeSwitchedOffAndRestyled() {
+        val a = PrintArea(text = "{BATCH}\n{MFG}\n{BB}")
+        val on = PrintOptions(bbStyle = "B.B", mfgStyle = "MFG")
+        assertEquals(listOf("Batch: QB1", "MFG: 2026", "B.B: 2030"), Ezpl.areaLines(a, "QB1", "2026", "2030", on))
+        val off = on.copy(batchPrefix = false, bbPrefix = false, mfgPrefix = false)
+        assertEquals(listOf("QB1", "2026", "2030"), Ezpl.areaLines(a, "QB1", "2026", "2030", off))
+    }
+
+    @Test
+    fun typedPrefixesMoveToOptionsWithoutChangingOutput() {
+        val t = LabelTemplate(
+            id = "a", name = "a", imagePath = "",
+            areas = listOf(PrintArea(text = "Batch : {BATCH}\nBB: {BB}"), PrintArea(text = "Made {MFG}")),
+        )
+        val m = Ezpl.migratePrefixes(t)
+        assertEquals("{BATCH}\n{BB}", m.areas[0].text)
+        assertEquals("Made {MFG}", m.areas[1].text)
+        assertTrue(m.options.batchPrefix)
+        assertEquals("BB", m.options.bbStyle)
+        assertFalse(m.options.mfgPrefix)
+        assertEquals(listOf("Batch: Q", "BB: 2030"), Ezpl.areaLines(m.areas[0], "Q", "2026", "2030", m.options))
+        assertEquals(listOf("Made 2026"), Ezpl.areaLines(m.areas[1], "Q", "2026", "2030", m.options))
     }
 
     @Test
