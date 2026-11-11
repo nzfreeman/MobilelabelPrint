@@ -219,6 +219,13 @@ class EzplTest {
     }
 
     @Test
+    fun upsideDownAddsHalfTurn() {
+        assertEquals(180, Ezpl.printRotation(LabelTemplate(id = "a", name = "a", imagePath = "", upsideDown = true)))
+        assertEquals(270, Ezpl.printRotation(LabelTemplate(id = "a", name = "a", imagePath = "", rotation = 90, upsideDown = true)))
+        assertEquals(90, Ezpl.printRotation(LabelTemplate(id = "a", name = "a", imagePath = "", rotation = 90)))
+    }
+
+    @Test
     fun jobWithTwoAreasHasTwoGraphics() {
         val t = LabelTemplate(id = "a", name = "a", imagePath = "")
         val job = Ezpl.job(

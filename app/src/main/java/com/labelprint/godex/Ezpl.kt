@@ -116,6 +116,10 @@ object Ezpl {
         return t.copy(area = area)
     }
 
+    /** 실제로 찍는 회전(거꾸로 인쇄면 180도 더함). */
+    fun printRotation(t: LabelTemplate): Int =
+        ((t.rotation + if (t.upsideDown) 180 else 0) % 360 + 360) % 360
+
     /** 다른 라벨의 크기·방향·인쇄 영역·글자 설정을 가져온다. 이름과 사진은 그대로 둔다. */
     fun copySettings(to: LabelTemplate, from: LabelTemplate): LabelTemplate = to.copy(
         widthMm = from.widthMm, lengthMm = from.lengthMm, gapMm = from.gapMm, rotation = from.rotation,
@@ -285,7 +289,7 @@ object Ezpl {
     fun areaPlacement(t: LabelTemplate, a: PrintArea, dpi: Int): Placement {
         val (dw, dh) = designSize(t)
         val r = rotateRect(
-            NRect(a.xMm / dw, a.yMm / dh, (a.xMm + a.wMm) / dw, (a.yMm + a.hMm) / dh).normalized(), t.rotation,
+            NRect(a.xMm / dw, a.yMm / dh, (a.xMm + a.wMm) / dw, (a.yMm + a.hMm) / dh).normalized(), printRotation(t),
         )
         val wd = dots(t.widthMm, dpi)
         val ld = dots(t.lengthMm, dpi)

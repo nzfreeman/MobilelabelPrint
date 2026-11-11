@@ -162,6 +162,7 @@ internal fun EditScreen(
             val (w, h) = Ezpl.designSize(t)
             t = Ezpl.withDesignSize(t, w, h, r)
         }
+        Check("거꾸로 인쇄 (업사이드 다운)", t.upsideDown) { v -> t = t.copy(upsideDown = v) }
         Text(
             "프린터로 보내는 값: 폭 ${mm(t.widthMm)} mm × 길이(용지 진행 방향) ${mm(t.lengthMm)} mm, 간격 ${mm(t.gapMm)} mm. " +
                 "이 길이가 실제 라벨과 다르면 프린터가 라벨을 찾지 못해 인쇄 도중 멈춥니다.",

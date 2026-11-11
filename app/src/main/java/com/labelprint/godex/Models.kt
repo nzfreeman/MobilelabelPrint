@@ -103,6 +103,8 @@ data class LabelTemplate(
     val gapMm: Float = 3f,
     /** 사진을 시계 방향으로 이만큼 돌리면 프린터에서 나오는 방향(먼저 나오는 쪽이 위)이 된다. */
     val rotation: Int = 0,
+    /** 거꾸로 찍을 때 켠다. 실제 회전에 180도를 더한다. */
+    val upsideDown: Boolean = false,
     /** 사진 안에서 라벨이 차지하는 범위. */
     val outline: NRect = NRect.FULL,
     /** 사진 안에서 인쇄할 영역. */

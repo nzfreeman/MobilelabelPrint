@@ -144,7 +144,7 @@ class Store(context: Context) {
             .put("id", t.id).put("name", t.name).put("imagePath", t.imagePath)
             .put("driveFileId", t.driveFileId ?: "")
             .put("widthMm", t.widthMm.toDouble()).put("lengthMm", t.lengthMm.toDouble())
-            .put("gapMm", t.gapMm.toDouble()).put("rotation", t.rotation)
+            .put("gapMm", t.gapMm.toDouble()).put("rotation", t.rotation).put("upsideDown", t.upsideDown)
             .put("outline", rect(t.outline)).put("area", rect(t.area))
             .put("configured", t.configured)
             .put("marginLeft", t.marginLeft.toDouble()).put("marginTop", t.marginTop.toDouble())
@@ -182,6 +182,7 @@ class Store(context: Context) {
             lengthMm = j.optDouble("lengthMm", d.lengthMm.toDouble()).toFloat(),
             gapMm = j.optDouble("gapMm", d.gapMm.toDouble()).toFloat(),
             rotation = j.optInt("rotation", 0),
+            upsideDown = j.optBoolean("upsideDown", false),
             outline = rect(j.optJSONArray("outline"), d.outline),
             area = rect(j.optJSONArray("area"), d.area),
             configured = j.optBoolean("configured", false),
