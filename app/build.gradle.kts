@@ -16,6 +16,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Shrink unused library code so the APK stays small enough to upload and share.
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+        }
         release {
             isMinifyEnabled = false
         }
