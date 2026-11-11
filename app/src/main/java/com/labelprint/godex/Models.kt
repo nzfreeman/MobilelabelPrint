@@ -141,3 +141,16 @@ data class PrinterSettings(
     /** 배치 목록 구글 시트 주소. 비우면 라벨 폴더 안의 시트를 찾는다. */
     val sheetUrl: String = "https://docs.google.com/spreadsheets/d/1YwYZh777PkWvqwosdyUIPG9Q2doRH5zzhkTaurj-hmo/edit?gid=0#gid=0",
 )
+
+/** 인쇄 기록 한 건. time은 보낸 시각(ms). */
+data class PrintLog(
+    val time: Long,
+    val labelId: String,
+    val labelName: String,
+    val batch: String,
+    val mfg: String,
+    val bb: String,
+    val count: Int,
+    /** 보낸 뒤 프린터 상태 등. */
+    val note: String = "",
+)

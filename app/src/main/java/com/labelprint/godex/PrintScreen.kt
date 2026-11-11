@@ -58,7 +58,10 @@ import java.util.UUID
 
 @Composable
 internal fun HomeScreen(
+    store: Store,
     labels: List<LabelTemplate>,
+    logs: List<PrintLog>,
+    onLog: () -> Unit,
     onAdd: (LabelTemplate) -> Unit,
     onOpen: (LabelTemplate) -> Unit,
     onEdit: (LabelTemplate) -> Unit,
@@ -66,33 +69,64 @@ internal fun HomeScreen(
     onSettings: () -> Unit,
 ) {
     var confirmDelete by remember { mutableStateOf<LabelTemplate?>(null) }
+    var message by remember { mutableStateOf("") }
+
+    fun register(photo: String) {
+        val base = LabelTemplate(id = UUID.randomUUID().toString(), name = "새 라벨 ${labels.size + 1}", imagePath = photo)
+        val t = base.copy(areas = listOf(Ezpl.newArea(base)))
+        onAdd(t)
+        onEdit(t)
+    }
+
+    val picker = rememberPhotoPicker(store) { path ->
+        if (path == null) message = "사진을 읽지 못했습니다." else register(path)
+    }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Header("라벨 인쇄", action = { TextButton(onClick = onSettings) { Text("프린터 설정") } })
-        Button(onClick = {
-            val base = LabelTemplate(id = UUID.randomUUID().toString(), name = "새 라벨 ${labels.size + 1}", imagePath = "")
-            val t = base.copy(areas = listOf(Ezpl.newArea(base)))
-            onAdd(t)
-            onEdit(t)
-        }) { Text("새 라벨 추가") }
+        Header("라벨 인쇄", action = {
+            Row {
+                TextButton(onClick = onLog) { Text("인쇄 기록") }
+                TextButton(onClick = onSettings) { Text("프린터 설정") }
+            }
+        })
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = picker.camera) { Text("사진 찍어 등록") }
+            OutlinedButton(onClick = picker.gallery) { Text("갤러리에서") }
+            OutlinedButton(onClick = { register("") }) { Text("사진 없이") }
+        }
         Text(
-            "라벨 크기와 인쇄 영역을 mm로 직접 입력해서 등록합니다.",
+            "라벨 사진을 찍어 등록한 뒤 크기와 인쇄 영역을 mm로 입력합니다. 사진은 라벨을 알아보는 용도이고, 등록한 값은 라벨마다 저장됩니다.",
             style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp),
         )
+        if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
-        if (labels.isEmpty()) Text("등록된 라벨이 없습니다. '새 라벨 추가'를 누르세요.")
+        if (labels.isEmpty()) Text("등록된 라벨이 없습니다. 라벨 사진을 찍어 등록하세요.")
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(labels, key = { it.id }) { t ->
                 Card(Modifier.fillMaxWidth().clickable { onOpen(t) }) {
                     Column(Modifier.padding(12.dp)) {
                         val (w, h) = Ezpl.designSize(t)
-                        Text(t.name, fontWeight = FontWeight.Bold)
+                        val bmp = rememberBitmap(t.imagePath, 600)
+                        if (bmp != null) {
+                            Image(
+                                bmp.asImageBitmap(), contentDescription = t.name,
+                                modifier = Modifier.fillMaxWidth().height(110.dp), contentScale = ContentScale.Fit,
+                            )
+                        }
+                        Text(t.name, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
                         Text(
                             if (t.configured) "${mm(w)} × ${mm(h)} mm · 인쇄 영역 ${t.areas.size}개 · 눌러서 인쇄"
                             else "라벨 설정 필요 · 눌러서 설정",
                             style = MaterialTheme.typography.bodySmall,
                             color = if (t.configured) Color.Unspecified else MaterialTheme.colorScheme.error,
                         )
+                        val mine = logs.filter { it.labelId == t.id }
+                        if (mine.isNotEmpty()) {
+                            Text(
+                                "지금까지 ${mine.sumOf { it.count }}장 인쇄 · 마지막 ${logTime(mine.last().time)}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
                         Row {
                             TextButton(onClick = { onEdit(t) }) { Text("라벨 설정") }
                             TextButton(onClick = { confirmDelete = t }) { Text("삭제") }
@@ -114,6 +148,55 @@ internal fun HomeScreen(
     }
 }
 
+internal fun logTime(ms: Long): String = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(ms)
+
+// ───────────────────────── 인쇄 기록 ─────────────────────────
+
+@Composable
+internal fun LogScreen(logs: List<PrintLog>, onClear: () -> Unit, onBack: () -> Unit) {
+    var confirm by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Header("인쇄 기록", onBack = onBack, action = {
+            TextButton(onClick = { confirm = true }, enabled = logs.isNotEmpty()) { Text("기록 지우기") }
+        })
+        if (logs.isEmpty()) {
+            Text("아직 인쇄 기록이 없습니다. 프린터로 보낼 때마다 여기에 남습니다.")
+        } else {
+            Text("전체 ${logs.sumOf { it.count }}장 (${logs.size}번 인쇄)", fontWeight = FontWeight.Bold)
+            logs.groupBy { it.labelName }.forEach { (name, list) ->
+                Text("$name: ${list.sumOf { it.count }}장", style = MaterialTheme.typography.bodySmall)
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            LazyColumn {
+                items(logs.asReversed()) { e ->
+                    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                        Text("${logTime(e.time)} · ${e.labelName} · ${e.count}장", fontWeight = FontWeight.Bold)
+                        Text(
+                            listOfNotNull(
+                                e.batch.takeIf { it.isNotBlank() }?.let { "Batch $it" },
+                                e.bb.takeIf { it.isNotBlank() }?.let { "BB $it" },
+                                e.mfg.takeIf { it.isNotBlank() }?.let { "MFG $it" },
+                            ).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        if (e.note.isNotBlank()) Text(e.note, style = MaterialTheme.typography.bodySmall)
+                    }
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("기록 지우기") },
+            text = { Text("인쇄 기록 ${logs.size}건을 모두 지웁니다. 되돌릴 수 없습니다.") },
+            confirmButton = { TextButton(onClick = { onClear(); confirm = false }) { Text("지우기") } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("취소") } },
+        )
+    }
+}
+
 internal fun fmt(v: Float): String = if (v == v.toInt().toFloat()) v.toInt().toString() else v.toString()
 
 /** mm 값 표시용: 소수 첫째 자리까지. */
@@ -128,6 +211,7 @@ internal fun PrintScreen(
     batches: List<BatchRow>,
     onRefreshBatches: suspend () -> String,
     onTemplate: (LabelTemplate) -> Unit,
+    onPrinted: (PrintLog) -> Unit,
     onSettings: (PrinterSettings) -> Unit,
     onEditArea: () -> Unit,
     onBack: () -> Unit,
@@ -302,6 +386,8 @@ internal fun PrintScreen(
                 busy = true
                 message = "프린터로 보내는 중…"
                 scope.launch {
+                    var sentAt = 0L
+                    var state = ""
                     message = withContext(Dispatchers.IO) {
                         try {
                             val overflow = t.areas.indices.firstOrNull { i ->
@@ -315,6 +401,7 @@ internal fun PrintScreen(
                                 "프린터 상태: ${Ezpl.statusText(st)}. 인쇄하지 않았습니다."
                             } else {
                                 PrinterClient.send(settings.ip, settings.port, Imaging.buildJob(t, settings, batch, mfg, bb, n))
+                                sentAt = System.currentTimeMillis()
                                 // 인쇄 중(50)·처리 중(60)에는 묻지 않고, 다 찍을 만큼 기다린 뒤 확인한다.
                                 val perLabelMs = ((t.lengthMm + t.gapMm) / (settings.speed.coerceIn(2, 7) * 25.4f) * 1000).toLong()
                                 Thread.sleep((perLabelMs * n + 1500).coerceAtMost(20000))
@@ -324,6 +411,7 @@ internal fun PrintScreen(
                                     Thread.sleep(2000); tries++
                                     after = try { PrinterClient.status(settings) } catch (e: Exception) { "" }
                                 }
+                                state = "보낸 뒤 프린터 상태: ${Ezpl.statusText(after)}"
                                 if (after.isNotBlank() && !Ezpl.isOk(after)) {
                                     "${n}장을 보냈지만 프린터가 오류 상태입니다: ${Ezpl.statusText(after)}"
                                 } else {
@@ -334,6 +422,8 @@ internal fun PrintScreen(
                             "프린터에 연결하지 못했습니다 (${settings.ip}): ${e.message}"
                         }
                     }
+                    // 프린터로 보낸 것은 뒤에 상태 확인이 실패했더라도 기록에 남긴다.
+                    if (sentAt > 0L) onPrinted(PrintLog(sentAt, t.id, t.name, batch.trim(), mfg.trim(), bb.trim(), n, state))
                     busy = false
                 }
             },

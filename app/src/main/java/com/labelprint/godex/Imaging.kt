@@ -19,6 +19,41 @@ import kotlin.math.max
 
 object Imaging {
 
+    /** 사진을 EXIF 방향대로 바로 세우고 긴 변 2000px 이하 JPEG로 저장한다. */
+    fun importPhoto(src: File, dest: File): Boolean {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(src.path, bounds)
+        if (bounds.outWidth <= 0) return false
+        var sample = 1
+        while (max(bounds.outWidth, bounds.outHeight) / sample > 4000) sample *= 2
+        val raw = BitmapFactory.decodeFile(src.path, BitmapFactory.Options().apply { inSampleSize = sample })
+            ?: return false
+        val deg = try {
+            when (ExifInterface(src.path).getAttributeInt(ExifInterface.TAG_ORIENTATION, 1)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                else -> 0
+            }
+        } catch (e: Exception) { 0 }
+        val longSide = max(raw.width, raw.height)
+        val scale = if (longSide > 2000) 2000f / longSide else 1f
+        val m = Matrix().apply { postScale(scale, scale); postRotate(deg.toFloat()) }
+        val out = Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, m, true)
+        dest.parentFile?.mkdirs()
+        FileOutputStream(dest).use { out.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+        return true
+    }
+
+    fun load(path: String, maxSide: Int = 1600): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, bounds)
+        if (bounds.outWidth <= 0) return null
+        var sample = 1
+        while (max(bounds.outWidth, bounds.outHeight) / sample > maxSide * 2) sample *= 2
+        return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
+    }
+
     /** 그린 결과. pt는 실제 쓰인 글자 크기, fits는 영역 안에 다 들어갔는지. */
     class Rendered(val bmp: Bitmap, val pt: Float, val fits: Boolean, val grown: Boolean = false)
 

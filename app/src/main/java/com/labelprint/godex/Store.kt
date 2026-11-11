@@ -68,6 +68,31 @@ class Store(context: Context) {
         batchesFile.writeText(arr.toString())
     }
 
+    private val logFile = File(dir, "printlog.json")
+
+    /** 인쇄 기록(오래된 것부터). */
+    fun loadLog(): List<PrintLog> = try {
+        val arr = JSONArray(logFile.readText())
+        (0 until arr.length()).map { arr.getJSONObject(it) }.map {
+            PrintLog(
+                time = it.optLong("time"), labelId = it.optString("labelId"), labelName = it.optString("labelName"),
+                batch = it.optString("batch"), mfg = it.optString("mfg"), bb = it.optString("bb"),
+                count = it.optInt("count"), note = it.optString("note"),
+            )
+        }
+    } catch (e: Exception) { emptyList() }
+
+    fun saveLog(list: List<PrintLog>) {
+        val arr = JSONArray()
+        list.forEach {
+            arr.put(JSONObject()
+                .put("time", it.time).put("labelId", it.labelId).put("labelName", it.labelName)
+                .put("batch", it.batch).put("mfg", it.mfg).put("bb", it.bb)
+                .put("count", it.count).put("note", it.note))
+        }
+        logFile.writeText(arr.toString())
+    }
+
     private fun rect(r: NRect) = JSONArray().put(r.l.toDouble()).put(r.t.toDouble()).put(r.r.toDouble()).put(r.b.toDouble())
     private fun rect(a: JSONArray?, d: NRect) = if (a == null || a.length() < 4) d else
         NRect(a.getDouble(0).toFloat(), a.getDouble(1).toFloat(), a.getDouble(2).toFloat(), a.getDouble(3).toFloat())

@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,6 +30,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * 라벨 설정 화면. 사진 없이 모두 숫자로 정한다.
@@ -36,7 +38,7 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 internal fun EditScreen(
-    template: LabelTemplate, settings: PrinterSettings,
+    template: LabelTemplate, settings: PrinterSettings, store: Store,
     onSave: (LabelTemplate) -> Unit, onBack: () -> Unit,
 ) {
     var t by remember(template.id) {
@@ -47,6 +49,12 @@ internal fun EditScreen(
     fun setArea(i: Int, change: (PrintArea) -> PrintArea) {
         t = t.copy(areas = t.areas.mapIndexed { n, a -> if (n == i) change(a) else a })
     }
+
+    var photoNote by remember { mutableStateOf("") }
+    val picker = rememberPhotoPicker(store) { path ->
+        if (path == null) photoNote = "사진을 읽지 못했습니다." else { t = t.copy(imagePath = path); photoNote = "" }
+    }
+    val photo = rememberBitmap(t.imagePath, 1200)
 
     var preview by remember { mutableStateOf<Imaging.LabelPreview?>(null) }
     LaunchedEffect(t, settings.dpi) {
@@ -60,6 +68,24 @@ internal fun EditScreen(
         OutlinedTextField(
             value = t.name, onValueChange = { t = t.copy(name = it) },
             label = { Text("라벨 이름") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+        )
+
+        Section("라벨 사진 (라벨을 알아보는 용도)")
+        if (photo != null) {
+            Image(
+                photo.asImageBitmap(), contentDescription = "라벨 사진",
+                modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp), contentScale = ContentScale.Fit,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = picker.camera) { Text(if (t.imagePath.isBlank()) "사진 찍기" else "다시 찍기") }
+            OutlinedButton(onClick = picker.gallery) { Text("갤러리에서") }
+            if (t.imagePath.isNotBlank()) OutlinedButton(onClick = { t = t.copy(imagePath = "") }) { Text("사진 빼기") }
+        }
+        if (photoNote.isNotBlank()) Text(photoNote, color = MaterialTheme.colorScheme.error)
+        Text(
+            "사진은 인쇄 위치 계산에 쓰지 않습니다. 크기와 인쇄 영역은 아래에 입력한 숫자대로 저장됩니다.",
+            style = MaterialTheme.typography.bodySmall,
         )
 
         // ───── ① 라벨 크기 ─────
@@ -173,7 +199,11 @@ internal fun EditScreen(
         val problem = t.areas.indices.firstOrNull { Ezpl.areaProblem(t, t.areas[it]) != null }
         Button(
             enabled = problem == null,
-            onClick = { onSave(t.copy(configured = true)) },
+            onClick = {
+                // 사진을 바꿨거나 뺐으면 예전 사진 파일은 지운다.
+                if (template.imagePath.isNotBlank() && template.imagePath != t.imagePath) File(template.imagePath).delete()
+                onSave(t.copy(configured = true))
+            },
             modifier = Modifier.fillMaxWidth(),
         ) { Text("저장하고 인쇄 화면으로") }
         if (problem != null) {

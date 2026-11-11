@@ -99,6 +99,7 @@ private sealed interface Screen {
     data object Settings : Screen
     data class Edit(val id: String) : Screen
     data class Print(val id: String) : Screen
+    data object Log : Screen
 }
 
 @Composable
@@ -124,6 +125,12 @@ internal fun App(store: Store) {
     }
 
     var batches by remember { mutableStateOf(store.loadBatches()) }
+    var logs by remember { mutableStateOf(store.loadLog()) }
+
+    fun addLog(e: PrintLog) {
+        logs = (logs + e).takeLast(5000)
+        store.saveLog(logs)
+    }
 
     suspend fun refreshBatches(): String = try {
         val rows = withContext(Dispatchers.IO) { Drive.fetchBatches(settings) }
@@ -138,8 +145,12 @@ internal fun App(store: Store) {
 
     Surface(Modifier.fillMaxSize().safeDrawingPadding()) {
         when (val sc = screen) {
+            Screen.Log -> LogScreen(
+                logs, onClear = { logs = emptyList(); store.saveLog(logs) }, onBack = { screen = Screen.Home },
+            )
             Screen.Home -> HomeScreen(
-                labels,
+                store, labels, logs,
+                onLog = { screen = Screen.Log },
                 onAdd = { upsert(it) },
                 onOpen = { screen = if (it.configured) Screen.Print(it.id) else Screen.Edit(it.id) },
                 onEdit = { screen = Screen.Edit(it.id) },
@@ -150,7 +161,7 @@ internal fun App(store: Store) {
             is Screen.Edit -> {
                 val t = labels.firstOrNull { it.id == sc.id }
                 if (t == null) screen = Screen.Home
-                else EditScreen(t, settings, onSave = { upsert(it); screen = Screen.Print(it.id) }, onBack = { screen = Screen.Home })
+                else EditScreen(t, settings, store, onSave = { upsert(it); screen = Screen.Print(it.id) }, onBack = { screen = Screen.Home })
             }
             is Screen.Print -> {
                 val t = labels.firstOrNull { it.id == sc.id }
@@ -159,6 +170,7 @@ internal fun App(store: Store) {
                     t, settings, batches,
                     onRefreshBatches = { refreshBatches() },
                     onTemplate = { upsert(it) },
+                    onPrinted = { addLog(it) },
                     onSettings = ::updateSettings,
                     onEditArea = { screen = Screen.Edit(t.id) },
                     onBack = { screen = Screen.Home },
@@ -222,6 +234,55 @@ internal fun NumField(
         keyboardOptions = KeyboardOptions(keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number),
         modifier = modifier,
     )
+}
+
+@Composable
+internal fun rememberBitmap(path: String, maxSide: Int): Bitmap? {
+    var bmp by remember(path) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(path) {
+        bmp = if (path.isBlank()) null else withContext(Dispatchers.IO) { Imaging.load(path, maxSide) }
+    }
+    return bmp
+}
+
+/** 사진을 찍거나 갤러리에서 골라 앱 안에 저장한다. */
+internal class PhotoPicker(val camera: () -> Unit, val gallery: () -> Unit)
+
+/** onPhoto에는 저장된 사진 경로가 온다. 읽지 못했으면 null. */
+@Composable
+internal fun rememberPhotoPicker(store: Store, onPhoto: (String?) -> Unit): PhotoPicker {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val done by rememberUpdatedState(onPhoto)
+    val cameraFile = remember { File(context.cacheDir, "camera/shot.jpg").apply { parentFile?.mkdirs() } }
+
+    fun bring(src: File) {
+        scope.launch {
+            val dest = File(store.imageDir, "${UUID.randomUUID()}.jpg")
+            val ok = withContext(Dispatchers.IO) { Imaging.importPhoto(src, dest) }
+            done(if (ok) dest.path else null)
+        }
+    }
+
+    val take = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        if (ok) bring(cameraFile)
+    }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
+        if (uri != null) scope.launch {
+            val tmp = withContext(Dispatchers.IO) {
+                File(context.cacheDir, "camera/pick.bin").apply { parentFile?.mkdirs() }.also { f ->
+                    context.contentResolver.openInputStream(uri)?.use { input -> f.outputStream().use { input.copyTo(it) } }
+                }
+            }
+            bring(tmp)
+        }
+    }
+    return remember {
+        PhotoPicker(
+            camera = { take.launch(FileProvider.getUriForFile(context, "com.labelprint.godex.files", cameraFile)) },
+            gallery = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        )
+    }
 }
 
 /** 시트에서 읽은 배치 목록에서 한 줄을 고른다. */
