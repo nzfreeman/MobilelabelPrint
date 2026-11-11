@@ -54,6 +54,29 @@ object Imaging {
         return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
     }
 
+    /** 사진에서 라벨만 차지하는 범위(0..1). 찾지 못하면 NRect.FULL. */
+    fun detectLabel(bmp: Bitmap): NRect {
+        val gw = 200
+        val gh = (gw.toFloat() * bmp.height / bmp.width).toInt().coerceIn(8, 800)
+        val small = Bitmap.createScaledBitmap(bmp, gw, gh, true)
+        val px = IntArray(gw * gh)
+        small.getPixels(px, 0, gw, 0, 0, gw, gh)
+        return Ezpl.findLabel(px, gw, gh)
+    }
+
+    fun detectLabel(path: String): NRect = load(path, 800)?.let { detectLabel(it) } ?: NRect.FULL
+
+    /** 사진에서 rect 범위만 잘라 낸다. */
+    fun crop(bmp: Bitmap, rect: NRect): Bitmap {
+        val r = rect.normalized()
+        if (r.w >= 0.999f && r.h >= 0.999f) return bmp
+        val x = (r.l * bmp.width).toInt().coerceIn(0, bmp.width - 1)
+        val y = (r.t * bmp.height).toInt().coerceIn(0, bmp.height - 1)
+        val w = (r.w * bmp.width).toInt().coerceIn(1, bmp.width - x)
+        val h = (r.h * bmp.height).toInt().coerceIn(1, bmp.height - y)
+        return Bitmap.createBitmap(bmp, x, y, w, h)
+    }
+
     /** 그린 결과. pt는 실제 쓰인 글자 크기, fits는 영역 안에 다 들어갔는지. */
     class Rendered(val bmp: Bitmap, val pt: Float, val fits: Boolean, val grown: Boolean = false)
 

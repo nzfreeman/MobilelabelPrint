@@ -12,7 +12,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -38,7 +43,7 @@ import java.io.File
  */
 @Composable
 internal fun EditScreen(
-    template: LabelTemplate, settings: PrinterSettings, store: Store,
+    template: LabelTemplate, settings: PrinterSettings, store: Store, others: List<LabelTemplate>,
     onSave: (LabelTemplate) -> Unit, onBack: () -> Unit,
 ) {
     var t by remember(template.id) {
@@ -51,10 +56,30 @@ internal fun EditScreen(
     }
 
     var photoNote by remember { mutableStateOf("") }
-    val picker = rememberPhotoPicker(store) { path ->
-        if (path == null) photoNote = "사진을 읽지 못했습니다." else { t = t.copy(imagePath = path); photoNote = "" }
+    val scope = rememberCoroutineScope()
+    // 다른 라벨 설정을 가져오면 숫자 칸을 새 값으로 다시 그리기 위한 번호
+    var rev by remember { mutableStateOf(0) }
+    var showCopy by remember { mutableStateOf(false) }
+    var cropping by remember { mutableStateOf(false) }
+
+    fun autoCrop(path: String) {
+        scope.launch {
+            val found = withContext(Dispatchers.IO) { Imaging.detectLabel(path) }
+            if (t.imagePath == path) {
+                t = t.copy(outline = found)
+                photoNote = if (found == NRect.FULL) "라벨을 자동으로 찾지 못했습니다. '직접 자르기'로 맞추세요." else ""
+            }
+        }
     }
-    val photo = rememberBitmap(t.imagePath, 1200)
+
+    val picker = rememberPhotoPicker(store) { path ->
+        if (path == null) photoNote = "사진을 읽지 못했습니다." else {
+            t = t.copy(imagePath = path, outline = NRect.FULL); photoNote = ""; cropping = false
+            autoCrop(path)
+        }
+    }
+    val fullPhoto = rememberBitmap(t.imagePath, 1200)
+    val photo = remember(fullPhoto, t.outline) { fullPhoto?.let { Imaging.crop(it, t.outline) } }
 
     var preview by remember { mutableStateOf<Imaging.LabelPreview?>(null) }
     LaunchedEffect(t, settings.dpi) {
@@ -70,8 +95,21 @@ internal fun EditScreen(
             label = { Text("라벨 이름") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
         )
 
+        if (others.isNotEmpty()) {
+            OutlinedButton(onClick = { showCopy = true }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Text("기존 라벨 설정 가져오기")
+            }
+            Text(
+                "이미 등록한 라벨의 크기, 인쇄 영역, 내용, 글자 설정을 그대로 가져옵니다. 이름과 사진은 바뀌지 않습니다.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+
         Section("라벨 사진 (라벨을 알아보는 용도)")
-        if (photo != null) {
+        if (cropping && fullPhoto != null) {
+            CropEditor(fullPhoto, t.outline) { t = t.copy(outline = it) }
+            Text("파란 사각형을 라벨 가장자리에 맞추세요. 모서리나 변을 끌어서 조정합니다.", style = MaterialTheme.typography.bodySmall)
+        } else if (photo != null) {
             Image(
                 photo.asImageBitmap(), contentDescription = "라벨 사진",
                 modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp), contentScale = ContentScale.Fit,
@@ -80,7 +118,15 @@ internal fun EditScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = picker.camera) { Text(if (t.imagePath.isBlank()) "사진 찍기" else "다시 찍기") }
             OutlinedButton(onClick = picker.gallery) { Text("갤러리에서") }
-            if (t.imagePath.isNotBlank()) OutlinedButton(onClick = { t = t.copy(imagePath = "") }) { Text("사진 빼기") }
+            if (t.imagePath.isNotBlank()) {
+                OutlinedButton(onClick = { t = t.copy(imagePath = "", outline = NRect.FULL); cropping = false }) { Text("사진 빼기") }
+            }
+        }
+        if (t.imagePath.isNotBlank()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { cropping = false; autoCrop(t.imagePath) }) { Text("라벨만 자동 자르기") }
+                OutlinedButton(onClick = { cropping = !cropping }) { Text(if (cropping) "자르기 완료" else "직접 자르기") }
+            }
         }
         if (photoNote.isNotBlank()) Text(photoNote, color = MaterialTheme.colorScheme.error)
         Text(
@@ -88,6 +134,7 @@ internal fun EditScreen(
             style = MaterialTheme.typography.bodySmall,
         )
 
+        key(rev) {
         // ───── ① 라벨 크기 ─────
         Section("① 라벨(종이) 크기")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -180,6 +227,7 @@ internal fun EditScreen(
                 }
             }
         }
+        }
         Text(
             "내용 안의 {BATCH}, {MFG}, {BB} 자리에는 인쇄 화면에서 입력한 배치번호, MFG Date, Best Before가 들어갑니다. " +
                 "\"Batch:\", \"Best Before:\", \"MFG:\" 같은 머리말은 여기에 적지 말고 인쇄 화면의 '머리말'에서 켜고 끄세요. " +
@@ -211,5 +259,32 @@ internal fun EditScreen(
             Text("인쇄 영역 ${problem + 1}의 위치·크기를 먼저 고치세요.", color = MaterialTheme.colorScheme.error)
         }
         Spacer(Modifier.height(24.dp))
+    }
+
+    if (showCopy) {
+        AlertDialog(
+            onDismissRequest = { showCopy = false },
+            title = { Text("설정을 가져올 라벨") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    others.forEach { src ->
+                        val (w, h) = Ezpl.designSize(src)
+                        Column(
+                            Modifier.fillMaxWidth().clickable {
+                                t = Ezpl.copySettings(t, src); rev++; showCopy = false
+                            }.padding(vertical = 10.dp),
+                        ) {
+                            Text(src.name)
+                            Text(
+                                "${mm(w)} × ${mm(h)} mm · 인쇄 영역 ${src.areas.size}개",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { showCopy = false }) { Text("취소") } },
+        )
     }
 }

@@ -93,6 +93,61 @@ object Ezpl {
         return t.copy(area = area)
     }
 
+    /** 다른 라벨의 크기·방향·인쇄 영역·글자 설정을 가져온다. 이름과 사진은 그대로 둔다. */
+    fun copySettings(to: LabelTemplate, from: LabelTemplate): LabelTemplate = to.copy(
+        widthMm = from.widthMm, lengthMm = from.lengthMm, gapMm = from.gapMm, rotation = from.rotation,
+        areas = from.areas, options = from.options,
+    )
+
+    /**
+     * 사진에서 라벨이 차지하는 범위를 찾는다. 사진 가장자리의 색을 바탕(책상)으로 보고,
+     * 바탕과 다른 픽셀이 많이 모인 가로줄·세로줄의 가장 긴 구간을 라벨로 본다.
+     * @param px ARGB 픽셀(w × h). 찾지 못하면 NRect.FULL.
+     */
+    fun findLabel(px: IntArray, w: Int, h: Int): NRect {
+        if (w < 8 || h < 8) return NRect.FULL
+        val ring = maxOf(1, minOf(w, h) / 25)
+        val rs = ArrayList<Int>(); val gs = ArrayList<Int>(); val bs = ArrayList<Int>()
+        for (y in 0 until h) for (x in 0 until w) {
+            if (x < ring || y < ring || x >= w - ring || y >= h - ring) {
+                val p = px[y * w + x]
+                rs += (p shr 16) and 0xff; gs += (p shr 8) and 0xff; bs += p and 0xff
+            }
+        }
+        rs.sort(); gs.sort(); bs.sort()
+        val br = rs[rs.size / 2]; val bg = gs[gs.size / 2]; val bb = bs[bs.size / 2]
+        val diff = BooleanArray(w * h) { i ->
+            val p = px[i]
+            Math.abs(((p shr 16) and 0xff) - br) + Math.abs(((p shr 8) and 0xff) - bg) + Math.abs((p and 0xff) - bb) > 110
+        }
+        // 조건을 만족하는 칸들의 가장 긴 구간(2칸까지의 끊김은 이어 붙인다)
+        fun longest(n: Int, hit: (Int) -> Boolean): IntRange? {
+            var best: IntRange? = null
+            var start = -1; var last = -1
+            for (i in 0..n) {
+                val on = i < n && hit(i)
+                if (on) {
+                    if (start < 0 || i - last > 3) {
+                        if (start >= 0 && (best == null || last - start > best.last - best.first)) best = start..last
+                        start = i
+                    }
+                    last = i
+                }
+            }
+            if (start >= 0 && (best == null || last - start > best.last - best.first)) best = start..last
+            return best
+        }
+        val rows = longest(h) { y -> (0 until w).count { diff[y * w + it] } > w * 0.35f } ?: return NRect.FULL
+        val rowCount = rows.last - rows.first + 1
+        val cols = longest(w) { x -> rows.count { diff[it * w + x] } > rowCount * 0.35f } ?: return NRect.FULL
+        val r = NRect(
+            cols.first.toFloat() / w, rows.first.toFloat() / h,
+            (cols.last + 1f) / w, (rows.last + 1f) / h,
+        ).normalized()
+        val share = r.w * r.h
+        return if (share < 0.03f || share > 0.97f || r.w < 0.1f || r.h < 0.05f) NRect.FULL else r
+    }
+
     // ───── 직접 입력한 인쇄 영역 ─────
 
     private fun round1(v: Float): Float = Math.round(v * 10f) / 10f

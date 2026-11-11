@@ -71,15 +71,22 @@ internal fun HomeScreen(
     var confirmDelete by remember { mutableStateOf<LabelTemplate?>(null) }
     var message by remember { mutableStateOf("") }
 
-    fun register(photo: String) {
-        val base = LabelTemplate(id = UUID.randomUUID().toString(), name = "새 라벨 ${labels.size + 1}", imagePath = photo)
+    val scope = rememberCoroutineScope()
+
+    fun register(photo: String, crop: NRect = NRect.FULL) {
+        val base = LabelTemplate(
+            id = UUID.randomUUID().toString(), name = "새 라벨 ${labels.size + 1}", imagePath = photo, outline = crop,
+        )
         val t = base.copy(areas = listOf(Ezpl.newArea(base)))
         onAdd(t)
         onEdit(t)
     }
 
     val picker = rememberPhotoPicker(store) { path ->
-        if (path == null) message = "사진을 읽지 못했습니다." else register(path)
+        if (path == null) message = "사진을 읽지 못했습니다." else scope.launch {
+            // 사진에서 라벨만 보이게 자를 범위를 찾아 함께 저장한다.
+            register(path, withContext(Dispatchers.IO) { Imaging.detectLabel(path) })
+        }
     }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
@@ -106,7 +113,7 @@ internal fun HomeScreen(
                 Card(Modifier.fillMaxWidth().clickable { onOpen(t) }) {
                     Column(Modifier.padding(12.dp)) {
                         val (w, h) = Ezpl.designSize(t)
-                        val bmp = rememberBitmap(t.imagePath, 600)
+                        val bmp = rememberLabelPhoto(t.imagePath, t.outline, 900)
                         if (bmp != null) {
                             Image(
                                 bmp.asImageBitmap(), contentDescription = t.name,

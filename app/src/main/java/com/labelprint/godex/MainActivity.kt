@@ -141,6 +141,14 @@ internal fun App(store: Store) {
         "시트를 읽지 못했습니다: ${e.message}"
     }
 
+    // 사진은 있는데 아직 자르지 않은 라벨은 앱을 열 때 라벨만 보이게 자동으로 맞춘다.
+    LaunchedEffect(Unit) {
+        labels.filter { it.imagePath.isNotBlank() && it.outline == NRect.FULL }.forEach { t ->
+            val found = withContext(Dispatchers.IO) { Imaging.detectLabel(t.imagePath) }
+            if (found != NRect.FULL) labels.firstOrNull { it.id == t.id }?.let { upsert(it.copy(outline = found)) }
+        }
+    }
+
     BackHandler(enabled = screen != Screen.Home) { screen = Screen.Home }
 
     Surface(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -161,7 +169,7 @@ internal fun App(store: Store) {
             is Screen.Edit -> {
                 val t = labels.firstOrNull { it.id == sc.id }
                 if (t == null) screen = Screen.Home
-                else EditScreen(t, settings, store, onSave = { upsert(it); screen = Screen.Print(it.id) }, onBack = { screen = Screen.Home })
+                else EditScreen(t, settings, store, labels.filter { it.id != t.id && it.configured }, onSave = { upsert(it); screen = Screen.Print(it.id) }, onBack = { screen = Screen.Home })
             }
             is Screen.Print -> {
                 val t = labels.firstOrNull { it.id == sc.id }
@@ -243,6 +251,13 @@ internal fun rememberBitmap(path: String, maxSide: Int): Bitmap? {
         bmp = if (path.isBlank()) null else withContext(Dispatchers.IO) { Imaging.load(path, maxSide) }
     }
     return bmp
+}
+
+/** 라벨 사진을 저장된 범위(crop)만 잘라서 돌려준다. */
+@Composable
+internal fun rememberLabelPhoto(path: String, crop: NRect, maxSide: Int): Bitmap? {
+    val full = rememberBitmap(path, maxSide)
+    return remember(full, crop) { full?.let { Imaging.crop(it, crop) } }
 }
 
 /** 사진을 찍거나 갤러리에서 골라 앱 안에 저장한다. */

@@ -175,6 +175,33 @@ class EzplTest {
     }
 
     @Test
+    fun findsDarkLabelOnPlainDesk() {
+        // 100 x 150 desk (brown) with a dark label across rows 60..89, columns 5..94
+        val w = 100; val h = 150
+        val desk = 0xFFB9824A.toInt(); val label = 0xFF202020.toInt()
+        val px = IntArray(w * h) { i ->
+            val x = i % w; val y = i / w
+            if (y in 60..89 && x in 5..94) label else desk
+        }
+        val r = Ezpl.findLabel(px, w, h)
+        assertEquals(0.05f, r.l, 0.02f)
+        assertEquals(0.40f, r.t, 0.02f)
+        assertEquals(0.95f, r.r, 0.02f)
+        assertEquals(0.60f, r.b, 0.02f)
+        assertEquals(NRect.FULL, Ezpl.findLabel(IntArray(w * h) { desk }, w, h))
+    }
+
+    @Test
+    fun copySettingsKeepsNameAndPhoto() {
+        val src = Ezpl.withDesignSize(LabelTemplate(id = "s", name = "src", imagePath = "a.jpg"), 143f, 47f, 90)
+            .copy(areas = listOf(PrintArea(xMm = 100f)), options = PrintOptions(bbStyle = "BB"))
+        val out = Ezpl.copySettings(LabelTemplate(id = "n", name = "new", imagePath = "b.jpg"), src)
+        assertEquals("n", out.id); assertEquals("new", out.name); assertEquals("b.jpg", out.imagePath)
+        assertEquals(143f to 47f, Ezpl.designSize(out))
+        assertEquals(src.areas, out.areas); assertEquals("BB", out.options.bbStyle)
+    }
+
+    @Test
     fun jobWithTwoAreasHasTwoGraphics() {
         val t = LabelTemplate(id = "a", name = "a", imagePath = "")
         val job = Ezpl.job(
