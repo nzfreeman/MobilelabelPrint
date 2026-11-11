@@ -44,6 +44,7 @@ import java.io.File
 @Composable
 internal fun EditScreen(
     template: LabelTemplate, settings: PrinterSettings, store: Store, others: List<LabelTemplate>,
+    phrases: List<Phrase>,
     onSave: (LabelTemplate) -> Unit, onBack: () -> Unit,
 ) {
     var t by remember(template.id) {
@@ -82,9 +83,13 @@ internal fun EditScreen(
     val photo = remember(fullPhoto, t.outline) { fullPhoto?.let { Imaging.crop(it, t.outline) } }
 
     var preview by remember { mutableStateOf<Imaging.LabelPreview?>(null) }
-    LaunchedEffect(t, settings.dpi) {
+    LaunchedEffect(t, phrases, settings.dpi) {
+        // 미리보기에서는 문구 항목을 고른 문구(없으면 첫 문구, 그것도 없으면 항목 이름)로 채운다.
+        val sample = t.copy(picks = phrases.associate { p ->
+            p.key to (t.picks[p.key]?.takeIf { it.isNotBlank() } ?: p.options.firstOrNull() ?: p.title)
+        })
         preview = withContext(Dispatchers.Default) {
-            Imaging.previewLabel(t, "QB0000", "01/01/2026", "01/01/2030", settings.dpi)
+            Imaging.previewLabel(sample, "QB0000", "01/01/2026", "01/01/2030", settings.dpi)
         }
     }
 
@@ -205,6 +210,17 @@ internal fun EditScreen(
                     label = { Text("이 영역에 인쇄할 내용 (줄마다 한 줄)") }, minLines = 2,
                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 )
+                Text("눌러서 내용에 항목 추가", style = MaterialTheme.typography.bodySmall)
+                Chips(
+                    listOf("{BATCH}" to "+배치번호", "{BB}" to "+Best Before", "{MFG}" to "+MFG Date") +
+                        phrases.map { "{${it.key}}" to "+${it.title}" } + (FULL_LABEL_TEXT to "무지 라벨 전체 항목"),
+                    "",
+                ) { add ->
+                    setArea(i) {
+                        if (add == FULL_LABEL_TEXT || it.text.isBlank()) it.copy(text = add)
+                        else it.copy(text = it.text.trimEnd('\n') + "\n" + add)
+                    }
+                }
                 NumField("글자 크기 pt (0 = 영역에 꽉 차게)", fmt(a.fontPt), Modifier.fillMaxWidth(), decimal = true) { s ->
                     s.toFloatOrNull()?.let { v -> if (v >= 0) setArea(i) { it.copy(fontPt = v) } }
                 }
@@ -231,7 +247,8 @@ internal fun EditScreen(
         Text(
             "내용 안의 {BATCH}, {MFG}, {BB} 자리에는 인쇄 화면에서 입력한 배치번호, MFG Date, Best Before가 들어갑니다. " +
                 "\"Batch:\", \"Best Before:\", \"MFG:\" 같은 머리말은 여기에 적지 말고 인쇄 화면의 '머리말'에서 켜고 끄세요. " +
-                "MFG Date를 비우면 {MFG}가 있는 줄은 인쇄하지 않습니다. 고정 문구만 넣어도 됩니다.",
+                "MFG Date를 비우면 {MFG}가 있는 줄은 인쇄하지 않습니다. 고정 문구만 넣어도 됩니다. " +
+                "제품명·무게·수량·보관방법·RMP 번호·원산지·회사명은 미리 써 둔 문구 중에서 인쇄 화면에서 고르고, '인쇄 안 함'을 고르면 그 줄은 빠집니다.",
             style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp),
         )
 

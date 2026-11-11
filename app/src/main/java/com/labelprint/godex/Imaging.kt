@@ -165,7 +165,7 @@ object Imaging {
     /** 인쇄 작업 데이터를 만든다. 내용이 없는 영역은 건너뛴다. */
     fun buildJob(t: LabelTemplate, s: PrinterSettings, batch: String, mfg: String, bb: String, count: Int): ByteArray {
         val graphics = t.areas.mapNotNull { a ->
-            val lines = Ezpl.areaLines(a, batch, mfg, bb, t.options)
+            val lines = Ezpl.areaLines(a, batch, mfg, bb, t.options, t.picks)
             if (lines.isEmpty()) return@mapNotNull null
             val rotated = rotate(renderArea(t, a, lines, s.dpi).bmp, t.rotation)
             val p = Ezpl.areaPlacement(t, a, s.dpi)
@@ -194,7 +194,7 @@ object Imaging {
         val draw = Paint().apply { isFilterBitmap = true }
         val out = t.areas.mapIndexed { i, a ->
             val dst = RectF(a.xMm * scale, a.yMm * scale, (a.xMm + a.wMm) * scale, (a.yMm + a.hMm) * scale)
-            val lines = Ezpl.areaLines(a, batch, mfg, bb, t.options)
+            val lines = Ezpl.areaLines(a, batch, mfg, bb, t.options, t.picks)
             val r = if (lines.isEmpty() || a.wMm <= 0f || a.hMm <= 0f) null else renderArea(t, a, lines, dpi)
             if (r != null) c.drawBitmap(r.bmp, null, dst, draw)
             c.drawRect(dst, box)

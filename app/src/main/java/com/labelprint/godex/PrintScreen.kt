@@ -62,6 +62,7 @@ internal fun HomeScreen(
     labels: List<LabelTemplate>,
     logs: List<PrintLog>,
     onLog: () -> Unit,
+    onPhrases: () -> Unit,
     onAdd: (LabelTemplate) -> Unit,
     onOpen: (LabelTemplate) -> Unit,
     onEdit: (LabelTemplate) -> Unit,
@@ -106,6 +107,7 @@ internal fun HomeScreen(
             style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp),
         )
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
+        TextButton(onClick = onPhrases) { Text("미리 써 둔 문구 관리 (제품명, 무게, 보관방법 등)") }
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
         if (labels.isEmpty()) Text("등록된 라벨이 없습니다. 라벨 사진을 찍어 등록하세요.")
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -156,6 +158,37 @@ internal fun HomeScreen(
 }
 
 internal fun logTime(ms: Long): String = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(ms)
+
+// ───────────────────────── 미리 써 둔 문구 ─────────────────────────
+
+@Composable
+internal fun PhraseScreen(phrases: List<Phrase>, onChange: (List<Phrase>) -> Unit, onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        Header("미리 써 둔 문구", onBack = onBack)
+        Text(
+            "항목마다 쓸 문구를 한 줄에 하나씩 적어 두세요. 라벨 내용에 {PRODUCT} 같은 자리를 넣으면 " +
+                "인쇄 화면에서 이 목록 중 하나를 고르거나 '인쇄 안 함'을 고를 수 있습니다.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        phrases.forEach { p ->
+            key(p.key) {
+                // 입력 중인 줄바꿈과 빈 줄은 그대로 두고, 저장할 때만 빈 줄을 뺀다.
+                var text by remember { mutableStateOf(p.options.joinToString("\n")) }
+                Section("${p.title}  ·  내용에 넣는 자리 {${p.key}}")
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { v ->
+                        text = v
+                        val options = v.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+                        onChange(phrases.map { if (it.key == p.key) it.copy(options = options) else it })
+                    },
+                    label = { Text("${p.title} 문구 (줄마다 하나)") }, minLines = 2, modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
 
 // ───────────────────────── 인쇄 기록 ─────────────────────────
 
@@ -216,6 +249,8 @@ internal fun PrintScreen(
     t: LabelTemplate,
     settings: PrinterSettings,
     batches: List<BatchRow>,
+    phrases: List<Phrase>,
+    onPhrases: () -> Unit,
     onRefreshBatches: suspend () -> String,
     onTemplate: (LabelTemplate) -> Unit,
     onPrinted: (PrintLog) -> Unit,
@@ -239,6 +274,9 @@ internal fun PrintScreen(
     val needBatch = Ezpl.uses(t, "batch")
     val needBb = Ezpl.uses(t, "bb")
     val needMfg = Ezpl.uses(t, "mfg")
+    // 문구 항목은 라벨에서 고른 것(없으면 목록의 첫 문구)을 넣어서 인쇄한다.
+    val usedPhrases = phrases.filter { Ezpl.uses(t, it.key) }
+    val pt = t.copy(picks = Ezpl.effectivePicks(t, phrases))
 
     // 시트에서 고른 줄. MGO/UMF를 바꾸면 이 줄에서 날짜를 다시 가져온다.
     var picked by remember { mutableStateOf<BatchRow?>(null) }
@@ -266,10 +304,10 @@ internal fun PrintScreen(
     }
 
     var preview by remember { mutableStateOf<Imaging.LabelPreview?>(null) }
-    LaunchedEffect(t, batch, mfg, bb, settings.dpi) {
+    LaunchedEffect(pt, batch, mfg, bb, settings.dpi) {
         preview = withContext(Dispatchers.Default) {
             Imaging.previewLabel(
-                t, batch.ifBlank { "QB0000" }, if (batch.isBlank() && mfg.isBlank()) "01/01/2026" else mfg,
+                pt, batch.ifBlank { "QB0000" }, if (batch.isBlank() && mfg.isBlank()) "01/01/2026" else mfg,
                 bb.ifBlank { "01/01/2030" }, settings.dpi,
             )
         }
@@ -346,6 +384,23 @@ internal fun PrintScreen(
             mfg = SheetData.formatDate(mfg, it)
         }
 
+        if (usedPhrases.isNotEmpty()) {
+            Section("라벨 문구 선택")
+            usedPhrases.forEach { ph ->
+                val cur = pt.picks[ph.key] ?: ""
+                Text(ph.title, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
+                Chips(ph.options.map { it to it } + ("" to "인쇄 안 함"), cur) { v ->
+                    onTemplate(t.copy(picks = t.picks + (ph.key to v)))
+                }
+                OutlinedTextField(
+                    value = cur, onValueChange = { v -> onTemplate(t.copy(picks = t.picks + (ph.key to v))) },
+                    label = { Text("${ph.title} 직접 입력 (비우면 인쇄 안 함)") },
+                    singleLine = true, modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            TextButton(onClick = onPhrases) { Text("미리 써 둔 문구 고치기") }
+        }
+
         Section("머리말 (값 앞에 붙는 글자)")
         if (needBatch) Check("\"Batch: \" 인쇄", o.batchPrefix) { setOptions(o.copy(batchPrefix = it)) }
         if (needBb) {
@@ -410,7 +465,7 @@ internal fun PrintScreen(
                     message = withContext(Dispatchers.IO) {
                         try {
                             val overflow = t.areas.indices.firstOrNull { i ->
-                                val lines = Ezpl.areaLines(t.areas[i], batch, mfg, bb, o)
+                                val lines = Ezpl.areaLines(t.areas[i], batch, mfg, bb, o, pt.picks)
                                 lines.isNotEmpty() && !Imaging.renderArea(t, t.areas[i], lines, settings.dpi).fits
                             }
                             val st = PrinterClient.status(settings)
@@ -419,7 +474,7 @@ internal fun PrintScreen(
                             } else if (st.isNotBlank() && !Ezpl.isOk(st)) {
                                 "프린터 상태: ${Ezpl.statusText(st)}. 인쇄하지 않았습니다."
                             } else {
-                                PrinterClient.send(settings.ip, settings.port, Imaging.buildJob(t, settings, batch, mfg, bb, n))
+                                PrinterClient.send(settings.ip, settings.port, Imaging.buildJob(pt, settings, batch, mfg, bb, n))
                                 sentAt = System.currentTimeMillis()
                                 // 인쇄 중(50)·처리 중(60)에는 묻지 않고, 다 찍을 만큼 기다린 뒤 확인한다.
                                 val perLabelMs = ((t.lengthMm + t.gapMm) / (settings.speed.coerceIn(2, 7) * 25.4f) * 1000).toLong()

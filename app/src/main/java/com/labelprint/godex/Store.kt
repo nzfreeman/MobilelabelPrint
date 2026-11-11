@@ -68,6 +68,23 @@ class Store(context: Context) {
         batchesFile.writeText(arr.toString())
     }
 
+    private val phrasesFile = File(dir, "phrases.json")
+
+    /** 미리 써 둔 문구. 저장된 것이 없는 항목은 기본값을 쓴다. */
+    fun loadPhrases(): List<Phrase> {
+        val j = try { JSONObject(phrasesFile.readText()) } catch (e: Exception) { null }
+        return DEFAULT_PHRASES.map { d ->
+            val arr = j?.optJSONArray(d.key) ?: return@map d
+            d.copy(options = (0 until arr.length()).map { arr.getString(it) })
+        }
+    }
+
+    fun savePhrases(list: List<Phrase>) {
+        val j = JSONObject()
+        list.forEach { p -> j.put(p.key, JSONArray().also { a -> p.options.forEach { a.put(it) } }) }
+        phrasesFile.writeText(j.toString())
+    }
+
     private val logFile = File(dir, "printlog.json")
 
     /** 인쇄 기록(오래된 것부터). */
@@ -110,6 +127,7 @@ class Store(context: Context) {
             .put("marginRight", t.marginRight.toDouble()).put("marginBottom", t.marginBottom.toDouble())
             .put("anchorRight", t.anchorRight).put("anchorBottom", t.anchorBottom)
             .put("blank", t.blank).put("textTemplate", t.textTemplate).put("tplV", 2)
+            .put("picks", JSONObject().also { p -> t.picks.forEach { (k, v) -> p.put(k, v) } })
             .put("areas", JSONArray().also { arr ->
                 t.areas.forEach { a ->
                     arr.put(JSONObject()
@@ -180,7 +198,9 @@ class Store(context: Context) {
                 bold = it.optBoolean("bold", true), centered = it.optBoolean("centered", false),
             )
         }
-        val withAreas = loaded.copy(areas = areas)
+        val pj = j.optJSONObject("picks")
+        val picks = if (pj == null) emptyMap() else pj.keys().asSequence().associateWith { pj.optString(it) }
+        val withAreas = loaded.copy(areas = areas, picks = picks)
         // v1.3까지는 머리말을 문구에 글자로 적었다. 한 번만 켜고 끄는 설정으로 옮긴다.
         val typedPrefixes = j.optInt("tplV", 0) < 2 && (arr != null || loaded.blank)
         return if (typedPrefixes) Ezpl.migratePrefixes(withAreas) else withAreas

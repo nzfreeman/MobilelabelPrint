@@ -25,21 +25,44 @@ object Ezpl {
      */
     fun templateLines(
         template: String, batch: String, mfg: String, bb: String, o: PrintOptions? = null,
+        picks: Map<String, String> = emptyMap(),
     ): List<String> {
-        val ph = Regex("\\{(batch|mfg|bb)\\}", RegexOption.IGNORE_CASE)
+        fun raw(k: String): String = when (k) {
+            "batch" -> batch.trim()
+            "mfg" -> mfg.trim()
+            "bb" -> bb.trim()
+            else -> (picks[k.uppercase()] ?: "").trim()
+        }
         return template.replace("\r", "").trim('\n').split('\n')
-            .filter { line -> mfg.isNotBlank() || !line.contains("{mfg}", ignoreCase = true) }
+            // MFG나 문구 항목의 값이 비어 있으면 그 자리가 있는 줄은 통째로 뺀다.
+            .filter { line ->
+                PLACEHOLDER.findAll(line).none { m ->
+                    val k = m.groupValues[1].lowercase()
+                    k != "batch" && k != "bb" && raw(k).isBlank()
+                }
+            }
             .map { line ->
-                ph.replace(line) { m ->
-                    when (m.groupValues[1].lowercase()) {
-                        // o가 있으면 설정에 따라 값 앞에 머리말을 붙인다.
-                        "batch" -> (if (o?.batchPrefix == true) "Batch: " else "") + batch.trim()
-                        "mfg" -> (if (o?.mfgPrefix == true) "${o.mfgStyle}: " else "") + mfg.trim()
-                        else -> (if (o?.bbPrefix == true) "${o.bbStyle}: " else "") + bb.trim()
+                PLACEHOLDER.replace(line) { m ->
+                    // o가 있으면 설정에 따라 값 앞에 머리말을 붙인다.
+                    when (val k = m.groupValues[1].lowercase()) {
+                        "batch" -> (if (o?.batchPrefix == true) "Batch: " else "") + raw(k)
+                        "mfg" -> (if (o?.mfgPrefix == true) "${o.mfgStyle}: " else "") + raw(k)
+                        "bb" -> (if (o?.bbPrefix == true) "${o.bbStyle}: " else "") + raw(k)
+                        else -> raw(k)
                     }
                 }.trimEnd()
             }
     }
+
+    private val PLACEHOLDER = Regex(
+        "\\{(batch|mfg|bb|product|weight|qty|storage|rmp|origin|company)\\}", RegexOption.IGNORE_CASE,
+    )
+
+    /**
+     * 이 라벨이 쓰는 문구 항목마다 실제로 찍을 글자. 라벨에서 고른 것이 없으면 목록의 첫 문구를 쓴다.
+     */
+    fun effectivePicks(t: LabelTemplate, phrases: List<Phrase>): Map<String, String> =
+        phrases.filter { uses(t, it.key) }.associate { it.key to (t.picks[it.key] ?: it.options.firstOrNull() ?: "") }
 
     /** 라벨 종류에 맞는 인쇄 문구. */
     fun linesFor(t: LabelTemplate, batch: String, mfg: String, bb: String): List<String> =
@@ -188,9 +211,12 @@ object Ezpl {
     }
 
     /** 영역에 찍을 줄들. 찍을 글자가 없으면 빈 목록. */
-    fun areaLines(a: PrintArea, batch: String, mfg: String, bb: String, o: PrintOptions): List<String> {
+    fun areaLines(
+        a: PrintArea, batch: String, mfg: String, bb: String, o: PrintOptions,
+        picks: Map<String, String> = emptyMap(),
+    ): List<String> {
         if (a.text.isBlank()) return emptyList()
-        val out = templateLines(a.text, batch, mfg, bb, o)
+        val out = templateLines(a.text, batch, mfg, bb, o, picks)
         return if (out.any { it.isNotBlank() }) out else emptyList()
     }
 

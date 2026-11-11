@@ -202,6 +202,23 @@ class EzplTest {
     }
 
     @Test
+    fun phrasePicksFillLinesAndEmptyOnesAreDropped() {
+        val a = PrintArea(text = "{PRODUCT} {WEIGHT}\n{BATCH}\n{STORAGE}\n{COMPANY}")
+        val t = LabelTemplate(id = "a", name = "a", imagePath = "", areas = listOf(a), picks = mapOf("STORAGE" to ""))
+        val phrases = listOf(
+            Phrase("PRODUCT", "p", listOf("Honey", "Other")), Phrase("WEIGHT", "w", listOf("500g")),
+            Phrase("STORAGE", "s", listOf("Cool")), Phrase("COMPANY", "c", emptyList()), Phrase("RMP", "r", listOf("X")),
+        )
+        val picks = Ezpl.effectivePicks(t, phrases)
+        assertEquals(mapOf("PRODUCT" to "Honey", "WEIGHT" to "500g", "STORAGE" to "", "COMPANY" to ""), picks)
+        assertEquals(listOf("Honey 500g", "Batch: Q1"), Ezpl.areaLines(a, "Q1", "", "", PrintOptions(), picks))
+        assertEquals(
+            listOf("Other 500g", "Batch: Q1", "Cool"),
+            Ezpl.areaLines(a, "Q1", "", "", PrintOptions(), picks + mapOf("PRODUCT" to "Other", "STORAGE" to "Cool")),
+        )
+    }
+
+    @Test
     fun jobWithTwoAreasHasTwoGraphics() {
         val t = LabelTemplate(id = "a", name = "a", imagePath = "")
         val job = Ezpl.job(

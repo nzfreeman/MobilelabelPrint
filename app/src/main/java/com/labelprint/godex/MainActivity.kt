@@ -100,6 +100,7 @@ private sealed interface Screen {
     data class Edit(val id: String) : Screen
     data class Print(val id: String) : Screen
     data object Log : Screen
+    data object Phrases : Screen
 }
 
 @Composable
@@ -126,6 +127,7 @@ internal fun App(store: Store) {
 
     var batches by remember { mutableStateOf(store.loadBatches()) }
     var logs by remember { mutableStateOf(store.loadLog()) }
+    var phrases by remember { mutableStateOf(store.loadPhrases()) }
 
     fun addLog(e: PrintLog) {
         logs = (logs + e).takeLast(5000)
@@ -153,12 +155,16 @@ internal fun App(store: Store) {
 
     Surface(Modifier.fillMaxSize().safeDrawingPadding()) {
         when (val sc = screen) {
+            Screen.Phrases -> PhraseScreen(
+                phrases, onChange = { phrases = it; store.savePhrases(it) }, onBack = { screen = Screen.Home },
+            )
             Screen.Log -> LogScreen(
                 logs, onClear = { logs = emptyList(); store.saveLog(logs) }, onBack = { screen = Screen.Home },
             )
             Screen.Home -> HomeScreen(
                 store, labels, logs,
                 onLog = { screen = Screen.Log },
+                onPhrases = { screen = Screen.Phrases },
                 onAdd = { upsert(it) },
                 onOpen = { screen = if (it.configured) Screen.Print(it.id) else Screen.Edit(it.id) },
                 onEdit = { screen = Screen.Edit(it.id) },
@@ -169,13 +175,14 @@ internal fun App(store: Store) {
             is Screen.Edit -> {
                 val t = labels.firstOrNull { it.id == sc.id }
                 if (t == null) screen = Screen.Home
-                else EditScreen(t, settings, store, labels.filter { it.id != t.id && it.configured }, onSave = { upsert(it); screen = Screen.Print(it.id) }, onBack = { screen = Screen.Home })
+                else EditScreen(t, settings, store, labels.filter { it.id != t.id && it.configured }, phrases, onSave = { upsert(it); screen = Screen.Print(it.id) }, onBack = { screen = Screen.Home })
             }
             is Screen.Print -> {
                 val t = labels.firstOrNull { it.id == sc.id }
                 if (t == null) screen = Screen.Home
                 else PrintScreen(
-                    t, settings, batches,
+                    t, settings, batches, phrases,
+                    onPhrases = { screen = Screen.Phrases },
                     onRefreshBatches = { refreshBatches() },
                     onTemplate = { upsert(it) },
                     onPrinted = { addLog(it) },

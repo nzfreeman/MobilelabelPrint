@@ -123,7 +123,25 @@ data class LabelTemplate(
     val options: PrintOptions = PrintOptions(),
     /** 직접 입력한 인쇄 영역들. 인쇄는 이 값만 쓴다(사진·outline·area는 예전 저장값을 옮길 때만 읽는다). */
     val areas: List<PrintArea> = emptyList(),
+    /** 문구 항목(PRODUCT 등)마다 이 라벨에서 고른 글자. 빈 글자는 "인쇄 안 함", 없으면 목록의 첫 문구. */
+    val picks: Map<String, String> = emptyMap(),
 )
+
+/** 미리 써 두고 골라 쓰는 문구 항목. 내용의 {key} 자리에 고른 문구가 들어간다. */
+data class Phrase(val key: String, val title: String, val options: List<String>)
+
+val DEFAULT_PHRASES = listOf(
+    Phrase("PRODUCT", "제품명", listOf("NZQueenBee Multiflora Honey")),
+    Phrase("WEIGHT", "무게", listOf("250g", "500g", "1kg")),
+    Phrase("QTY", "수량", emptyList()),
+    Phrase("STORAGE", "보관방법", listOf("Store Below 20 degrees")),
+    Phrase("RMP", "RMP 번호", listOf("RMP: NZQBEE1/01")),
+    Phrase("ORIGIN", "원산지", listOf("Product of New Zealand")),
+    Phrase("COMPANY", "회사명", emptyList()),
+)
+
+/** 무지 라벨에 모든 항목을 넣은 기본 내용. */
+val FULL_LABEL_TEXT = "{PRODUCT}\n{WEIGHT}\n{QTY}\n{BATCH}\n{MFG}\n{BB}\n{RMP}\n{STORAGE}\n{ORIGIN}\n{COMPANY}"
 
 data class PrinterSettings(
     val ip: String = "192.168.68.55",
