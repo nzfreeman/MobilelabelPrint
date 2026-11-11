@@ -162,6 +162,8 @@ data class PrinterSettings(
     val driveApiKey: String = "",
     /** 배치 목록 구글 시트 주소. 비우면 라벨 폴더 안의 시트를 찾는다. */
     val sheetUrl: String = "https://docs.google.com/spreadsheets/d/1YwYZh777PkWvqwosdyUIPG9Q2doRH5zzhkTaurj-hmo/edit?gid=0#gid=0",
+    /** 앱에서 저장한 배치를 시트에 넣어 주는 Apps Script 웹 앱 주소. 비우면 폰에만 저장한다. */
+    val batchPostUrl: String = "",
 )
 
 /** 인쇄 기록 한 건. time은 보낸 시각(ms). */

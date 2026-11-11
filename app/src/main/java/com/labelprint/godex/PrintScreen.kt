@@ -250,6 +250,9 @@ internal fun PrintScreen(
     settings: PrinterSettings,
     batches: List<BatchRow>,
     phrases: List<Phrase>,
+    savedCount: Int,
+    waitingCount: Int,
+    onSaveBatch: (BatchRow) -> Unit,
     onPhrases: () -> Unit,
     onRefreshBatches: suspend () -> String,
     onTemplate: (LabelTemplate) -> Unit,
@@ -345,7 +348,7 @@ internal fun PrintScreen(
 
         Section("인쇄할 내용")
         OutlinedButton(onClick = { showBatches = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("시트 목록에서 선택" + if (batches.isNotEmpty()) " (${batches.size}건)" else "")
+            Text("배치 목록에서 선택" + if (batches.isNotEmpty()) " (${batches.size}건)" else "")
         }
         Text("목록에서 고르거나 아래 칸에 직접 입력하세요. 고른 뒤에도 고칠 수 있습니다.", style = MaterialTheme.typography.bodySmall)
         Text("시트에서 가져올 Best Before 종류", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
@@ -376,6 +379,24 @@ internal fun PrintScreen(
                 TextButton(onClick = { pickDate { mfg = it } }) { Text("달력") }
             }
         }
+        OutlinedButton(
+            enabled = batch.isNotBlank() && bb.isNotBlank(),
+            onClick = {
+                onSaveBatch(
+                    BatchRow(
+                        batch = batch, mfg = mfg,
+                        bbMgo = if (o.bbKind == BB_UMF) "" else bb, bbUmf = if (o.bbKind == BB_UMF) bb else "",
+                    )
+                )
+                sheetNote = "'${batch.trim()}' 배치를 ${o.bbKind}용 Best Before와 함께 목록에 저장했습니다."
+            },
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        ) { Text("이 배치를 목록에 저장") }
+        Text(
+            "앱에 저장한 배치 ${savedCount}건" + (if (waitingCount > 0) " (시트에 아직 안 올라간 것 ${waitingCount}건)" else "") +
+                ". 저장한 배치는 지울 수 없고, 같은 번호로 다시 저장하면 입력한 날짜만 고쳐집니다.",
+            style = MaterialTheme.typography.bodySmall,
+        )
         Text("달력 날짜 형식", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
         Chips(DATE_FORMATS.map { it to it.uppercase(Locale.US) }, o.dateFormat) {
             setOptions(o.copy(dateFormat = it))

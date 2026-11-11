@@ -93,4 +93,28 @@ class SheetDataTest {
         val files = Drive.parseFolderHtml(html)
         assertEquals(listOf(true, false), files.map { it.isSheet })
     }
+
+    @Test
+    fun savedBatchesAreKeptMergedAndShownFirst() {
+        var saved = SheetData.addSaved(emptyList(), BatchRow(" QB1 ", "", "01/01/2030", ""), 10)
+        saved = SheetData.addSaved(saved, BatchRow("QB2", "02/02/2026", "", "03/03/2031"), 20)
+        // same batch again: no new row, only the typed cell changes, and it must be sent again
+        saved = saved.map { it.copy(synced = true) }
+        saved = SheetData.addSaved(saved, BatchRow("qb1", "", "", "05/05/2032"), 30)
+        assertEquals(2, saved.size)
+        assertEquals(BatchRow("QB1", "", "01/01/2030", "05/05/2032"), saved[0].row)
+        assertEquals(false, saved[0].synced)
+        assertEquals(true, saved[1].synced)
+        assertEquals(saved, SheetData.addSaved(saved, BatchRow(" ", "x", "y", "z"), 40))
+
+        val sheet = listOf(BatchRow("QB2", "old", "09/09/2029", ""), BatchRow("QB9", "", "x", ""))
+        assertEquals(
+            listOf(
+                BatchRow("QB1", "", "01/01/2030", "05/05/2032"),
+                BatchRow("QB2", "02/02/2026", "09/09/2029", "03/03/2031"),
+                BatchRow("QB9", "", "x", ""),
+            ),
+            SheetData.mergeBatches(saved, sheet),
+        )
+    }
 }

@@ -38,6 +38,32 @@ object Drive {
         return c
     }
 
+    /**
+     * 배치 한 줄을 시트의 Apps Script 웹 앱으로 보낸다(docs/sheet-sync.md). 실패하면 예외를 던진다.
+     * Apps Script는 POST에 302로 답하므로 그 주소를 한 번 더 읽어 결과를 확인한다.
+     */
+    fun postBatch(url: String, r: BatchRow) {
+        val body = JSONObject()
+            .put("batch", r.batch).put("mfg", r.mfg).put("bbMgo", r.bbMgo).put("bbUmf", r.bbUmf)
+            .toString().toByteArray(Charsets.UTF_8)
+        val c = URL(url).openConnection() as HttpURLConnection
+        c.connectTimeout = 15000
+        c.readTimeout = 30000
+        c.instanceFollowRedirects = false
+        c.requestMethod = "POST"
+        c.doOutput = true
+        c.setRequestProperty("Content-Type", "text/plain;charset=utf-8")
+        c.outputStream.use { it.write(body) }
+        var code = c.responseCode
+        val text = if (code in 301..303 || code == 307) {
+            val next = get(c.getHeaderField("Location") ?: throw IllegalStateException("시트 응답에 주소가 없습니다"))
+            code = next.responseCode
+            if (code == 200) next.inputStream.bufferedReader().use { it.readText() } else ""
+        } else if (code == 200) c.inputStream.bufferedReader().use { it.readText() } else ""
+        if (code != 200) throw IllegalStateException("시트 응답 $code")
+        if (!Regex("\"ok\"\\s*:\\s*true").containsMatchIn(text)) throw IllegalStateException("시트가 저장을 거부했습니다")
+    }
+
     fun list(folderId: String, apiKey: String): List<DFile> {
         if (apiKey.isNotBlank()) {
             val q = URLEncoder.encode("'$folderId' in parents and trashed=false", "UTF-8")

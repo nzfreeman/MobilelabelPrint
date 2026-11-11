@@ -128,19 +128,52 @@ internal fun App(store: Store) {
     var batches by remember { mutableStateOf(store.loadBatches()) }
     var logs by remember { mutableStateOf(store.loadLog()) }
     var phrases by remember { mutableStateOf(store.loadPhrases()) }
+    var saved by remember { mutableStateOf(store.loadSaved()) }
+    val appScope = rememberCoroutineScope()
+
+    /** 아직 시트로 못 보낸 저장 배치를 보낸다. 주소가 없으면 아무것도 하지 않는다. */
+    suspend fun syncSaved(): String {
+        val url = settings.batchPostUrl
+        val waiting = saved.filter { !it.synced }
+        if (url.isBlank() || waiting.isEmpty()) return ""
+        var sent = 0
+        var error = ""
+        for (w in waiting) {
+            try {
+                withContext(Dispatchers.IO) { Drive.postBatch(url, w.row) }
+                // 보내는 사이에 같은 배치를 또 고쳤으면(시각이 달라짐) 다음에 다시 보낸다.
+                saved = saved.map { if (it.row.batch == w.row.batch && it.time == w.time) it.copy(synced = true) else it }
+                store.saveSaved(saved)
+                sent++
+            } catch (e: Exception) {
+                error = e.message ?: "오류"
+                break
+            }
+        }
+        return if (error.isBlank()) " 시트에 ${sent}건을 올렸습니다." else " 시트에 올리지 못했습니다($error). 다음에 다시 시도합니다."
+    }
+
+    fun saveBatch(row: BatchRow) {
+        saved = SheetData.addSaved(saved, row, System.currentTimeMillis())
+        store.saveSaved(saved)
+        appScope.launch { syncSaved() }
+    }
 
     fun addLog(e: PrintLog) {
         logs = (logs + e).takeLast(5000)
         store.saveLog(logs)
     }
 
-    suspend fun refreshBatches(): String = try {
-        val rows = withContext(Dispatchers.IO) { Drive.fetchBatches(settings) }
-        batches = rows
-        store.saveBatches(rows)
-        "시트에서 ${rows.size}건을 읽었습니다."
-    } catch (e: Exception) {
-        "시트를 읽지 못했습니다: ${e.message}"
+    suspend fun refreshBatches(): String {
+        val pushed = syncSaved()
+        return try {
+            val rows = withContext(Dispatchers.IO) { Drive.fetchBatches(settings) }
+            batches = rows
+            store.saveBatches(rows)
+            "시트에서 ${rows.size}건을 읽었습니다.$pushed"
+        } catch (e: Exception) {
+            "시트를 읽지 못했습니다: ${e.message}$pushed"
+        }
     }
 
     // 사진은 있는데 아직 자르지 않은 라벨은 앱을 열 때 라벨만 보이게 자동으로 맞춘다.
@@ -181,7 +214,9 @@ internal fun App(store: Store) {
                 val t = labels.firstOrNull { it.id == sc.id }
                 if (t == null) screen = Screen.Home
                 else PrintScreen(
-                    t, settings, batches, phrases,
+                    t, settings, SheetData.mergeBatches(saved, batches), phrases,
+                    savedCount = saved.size, waitingCount = saved.count { !it.synced },
+                    onSaveBatch = { saveBatch(it) },
                     onPhrases = { screen = Screen.Phrases },
                     onRefreshBatches = { refreshBatches() },
                     onTemplate = { upsert(it) },
@@ -473,6 +508,15 @@ internal fun SettingsScreen(s: PrinterSettings, onChange: (PrinterSettings) -> U
         OutlinedTextField(
             value = s.sheetUrl, onValueChange = { onChange(s.copy(sheetUrl = it.trim())) },
             label = { Text("시트 주소 (비우면 라벨 폴더 안의 시트)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = s.batchPostUrl, onValueChange = { onChange(s.copy(batchPostUrl = it.trim())) },
+            label = { Text("배치 저장용 주소 (선택, Apps Script 웹 앱)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+        )
+        Text(
+            "앱에서 저장한 배치는 폰에 보관됩니다. 여기에 시트의 Apps Script 웹 앱 주소(https://script.google.com/macros/s/…/exec)를 " +
+                "넣으면 시트에도 자동으로 추가합니다. 시트 쪽은 줄을 추가만 하고 지우지 않습니다.",
+            style = MaterialTheme.typography.bodySmall,
         )
         Text(
             "시트도 '링크가 있는 모든 사용자'에게 공개되어 있어야 합니다. 첫 줄에 Batch, Best Before, MFG Date 머리글을 두면 " +

@@ -39,6 +39,7 @@ class Store(context: Context) {
             driveFolderId = j.optString("driveFolderId", d.driveFolderId),
             driveApiKey = j.optString("driveApiKey", d.driveApiKey),
             sheetUrl = j.optString("sheetUrl", d.sheetUrl),
+            batchPostUrl = j.optString("batchPostUrl", d.batchPostUrl),
         )
     } catch (e: Exception) { PrinterSettings() }
 
@@ -49,7 +50,7 @@ class Store(context: Context) {
             .put("leftMargin", s.leftMargin).put("stopPosition", s.stopPosition)
             .put("invert", s.invertBitmap)
             .put("driveFolderId", s.driveFolderId).put("driveApiKey", s.driveApiKey)
-            .put("sheetUrl", s.sheetUrl)
+            .put("sheetUrl", s.sheetUrl).put("batchPostUrl", s.batchPostUrl)
         settingsFile.writeText(j.toString())
     }
 
@@ -66,6 +67,29 @@ class Store(context: Context) {
         val arr = JSONArray()
         rows.forEach { arr.put(JSONArray().put(it.batch).put(it.mfg).put(it.bbMgo).put(it.bbUmf)) }
         batchesFile.writeText(arr.toString())
+    }
+
+    private val savedFile = File(dir, "savedbatches.json")
+
+    /** 앱에서 직접 저장한 배치(저장한 순서). */
+    fun loadSaved(): List<SavedBatch> = try {
+        val arr = JSONArray(savedFile.readText())
+        (0 until arr.length()).map { arr.getJSONObject(it) }.map {
+            SavedBatch(
+                BatchRow(it.optString("batch"), it.optString("mfg"), it.optString("bbMgo"), it.optString("bbUmf")),
+                it.optLong("time"), it.optBoolean("synced"),
+            )
+        }
+    } catch (e: Exception) { emptyList() }
+
+    fun saveSaved(list: List<SavedBatch>) {
+        val arr = JSONArray()
+        list.forEach {
+            arr.put(JSONObject()
+                .put("batch", it.row.batch).put("mfg", it.row.mfg).put("bbMgo", it.row.bbMgo).put("bbUmf", it.row.bbUmf)
+                .put("time", it.time).put("synced", it.synced))
+        }
+        savedFile.writeText(arr.toString())
     }
 
     private val phrasesFile = File(dir, "phrases.json")
