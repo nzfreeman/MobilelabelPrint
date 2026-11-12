@@ -145,6 +145,7 @@ class Store(context: Context) {
             .put("driveFileId", t.driveFileId ?: "")
             .put("widthMm", t.widthMm.toDouble()).put("lengthMm", t.lengthMm.toDouble())
             .put("gapMm", t.gapMm.toDouble()).put("rotation", t.rotation).put("upsideDown", t.upsideDown)
+            .put("printOffsetXmm", t.printOffsetXmm.toDouble()).put("printOffsetYmm", t.printOffsetYmm.toDouble())
             .put("outline", rect(t.outline)).put("area", rect(t.area))
             .put("configured", t.configured)
             .put("marginLeft", t.marginLeft.toDouble()).put("marginTop", t.marginTop.toDouble())
@@ -183,6 +184,8 @@ class Store(context: Context) {
             gapMm = j.optDouble("gapMm", d.gapMm.toDouble()).toFloat(),
             rotation = j.optInt("rotation", 0),
             upsideDown = j.optBoolean("upsideDown", false),
+            printOffsetXmm = j.optDouble("printOffsetXmm", 0.0).toFloat().takeIf { it.isFinite() } ?: 0f,
+            printOffsetYmm = j.optDouble("printOffsetYmm", 0.0).toFloat().takeIf { it.isFinite() } ?: 0f,
             outline = rect(j.optJSONArray("outline"), d.outline),
             area = rect(j.optJSONArray("area"), d.area),
             configured = j.optBoolean("configured", false),

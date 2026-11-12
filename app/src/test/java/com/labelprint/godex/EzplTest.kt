@@ -226,6 +226,39 @@ class EzplTest {
     }
 
     @Test
+    fun printOffsetsMoveInPrinterAxesAfterEveryRotation() {
+        val a = PrintArea(xMm = 100f, yMm = 10f, wMm = 40f, hMm = 10f)
+        for (rotation in listOf(0, 90, 180, 270)) for (upsideDown in listOf(false, true)) {
+            val t = Ezpl.withDesignSize(LabelTemplate(id = "a", name = "a", imagePath = ""), 300f, 47f, rotation)
+                .copy(upsideDown = upsideDown)
+            val base = Ezpl.areaPlacement(t, a, 300)
+            val shifted = t.copy(printOffsetXmm = 2f, printOffsetYmm = -3f)
+            val p = Ezpl.areaPlacement(shifted, a, 300)
+            assertEquals(base.x + Ezpl.dots(2f, 300), p.x)
+            assertEquals(base.y + Ezpl.dots(-3f, 300), p.y)
+            assertEquals(base.w, p.w); assertEquals(base.h, p.h)
+            assertNull(Ezpl.printAreaProblem(shifted, a, 300))
+        }
+    }
+
+    @Test
+    fun offsetsRejectOutOfBoundsAndAreCopiedWithOrientation() {
+        val a = PrintArea(xMm = 10f, yMm = 20f, wMm = 10f, hMm = 10f)
+        val t = LabelTemplate(id = "a", name = "a", imagePath = "", areas = listOf(a))
+        assertNull(Ezpl.printAreaProblem(t, a, 300))
+        for ((x, y) in listOf(-11f to 0f, 28f to 0f, 0f to -21f, 0f to 114f)) {
+            assertNotNull(Ezpl.printAreaProblem(t.copy(printOffsetXmm = x, printOffsetYmm = y), a, 300))
+        }
+        assertNotNull(Ezpl.printAreaProblem(t.copy(printOffsetXmm = Float.NaN), a, 300))
+        val source = t.copy(upsideDown = true, printOffsetXmm = -1.5f, printOffsetYmm = 2f)
+        val copied = Ezpl.copySettings(t.copy(id = "b", name = "other"), source)
+        assertEquals("b", copied.id)
+        assertTrue(copied.upsideDown)
+        assertEquals(-1.5f, copied.printOffsetXmm, 0f)
+        assertEquals(2f, copied.printOffsetYmm, 0f)
+    }
+
+    @Test
     fun upsideDownChangesRasterAndJobBytesBeforeBytePadding() {
         val black = 0xff000000.toInt()
         val white = 0xffffffff.toInt()

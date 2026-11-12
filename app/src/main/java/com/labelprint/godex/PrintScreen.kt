@@ -311,16 +311,17 @@ internal fun PrintScreen(
         preview = withContext(Dispatchers.Default) {
             Imaging.previewLabel(
                 pt, batch.ifBlank { "QB0000" }, if (batch.isBlank() && mfg.isBlank()) "01/01/2026" else mfg,
-                bb.ifBlank { "01/01/2030" }, settings.dpi,
+                bb.ifBlank { "01/01/2030" }, settings.dpi, printerView = true,
             )
         }
     }
 
+    var offsetsValid by remember(t.id) { mutableStateOf(true) }
     val n = count.toIntOrNull() ?: 0
-    val badSize = t.areas.indices.firstOrNull { Ezpl.areaProblem(t, t.areas[it]) != null }
+    val badSize = t.areas.indices.firstOrNull { Ezpl.printAreaProblem(t, t.areas[it], settings.dpi) != null }
     val badFit = preview?.areas?.indexOfFirst { it != null && !it.fits }?.takeIf { it >= 0 }
     val ready = t.areas.isNotEmpty() && (!needBatch || batch.isNotBlank()) && (!needBb || bb.isNotBlank()) &&
-        n in 1..9999 && !busy && badSize == null && badFit == null
+        n in 1..9999 && !busy && offsetsValid && badSize == null && badFit == null
     val (designW, designH) = Ezpl.designSize(t)
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
@@ -334,12 +335,16 @@ internal fun PrintScreen(
             style = MaterialTheme.typography.bodySmall,
         )
         preview?.let { p ->
-            val feedPreview = remember(p.bmp, t.rotation, t.upsideDown) { Imaging.rotate(p.bmp, Ezpl.printRotation(t)) }
             Image(
-                feedPreview.asImageBitmap(), contentDescription = "용지 진행 방향 기준 인쇄 미리보기 (위쪽이 먼저 나옴)",
+                p.bmp.asImageBitmap(), contentDescription = "위치 보정이 반영된 인쇄 미리보기 (위쪽이 먼저 나옴)",
                 modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp), contentScale = ContentScale.Fit,
             )
         }
+        PrintPositionControls(t, enabled = !busy, onValid = { offsetsValid = it }, onChange = onTemplate)
+        if (badSize != null) Text(
+            "영역 ${badSize + 1}: ${Ezpl.printAreaProblem(t, t.areas[badSize], settings.dpi)}",
+            color = MaterialTheme.colorScheme.error,
+        )
         Text(
             "라벨 ${mm(designW)} × ${mm(designH)} mm (프린터 폭 ${mm(t.widthMm)} × 길이 ${mm(t.lengthMm)} mm, 간격 ${mm(t.gapMm)} mm). " +
                 "빨간 사각형이 인쇄 영역이고, 값을 비워 두면 예시 글자가 보입니다.",
@@ -507,7 +512,7 @@ internal fun PrintScreen(
                                 val job = Imaging.buildJob(pt, settings, batch, mfg, bb, n)
                                 val fingerprint = java.security.MessageDigest.getInstance("SHA-256")
                                     .digest(job).take(6).joinToString("") { "%02x".format(it.toInt() and 255) }
-                                val direction = "${if (pt.upsideDown) "거꾸로" else "기본"} (${Ezpl.printRotation(pt)}°), 데이터 $fingerprint"
+                                val direction = "${if (pt.upsideDown) "거꾸로" else "기본"} (${Ezpl.printRotation(pt)}°), 보정 X ${mm(pt.printOffsetXmm)} / Y ${mm(pt.printOffsetYmm)} mm, 데이터 $fingerprint"
                                 PrinterClient.send(settings.ip, settings.port, job)
                                 sentAt = System.currentTimeMillis()
                                 // 인쇄 중(50)·처리 중(60)에는 묻지 않고, 다 찍을 만큼 기다린 뒤 확인한다.
@@ -540,9 +545,10 @@ internal fun PrintScreen(
             // 버튼이 눌리지 않는 이유를 정확히 알려 준다.
             val why = when {
                 t.areas.isEmpty() -> "'라벨 설정'에서 인쇄 영역을 먼저 만드세요."
-                badSize != null -> "인쇄 영역 ${badSize + 1}이 라벨 밖으로 나갑니다. '라벨 설정'에서 고치세요."
+                badSize != null -> "인쇄 영역 ${badSize + 1}이 라벨 밖으로 나갑니다. 위치 보정이나 '라벨 설정'을 확인하세요."
                 needBatch && batch.isBlank() -> "배치번호를 입력하세요."
                 needBb && bb.isBlank() -> "Best Before를 입력하세요."
+                !offsetsValid -> "위치 보정 칸에 mm 숫자를 입력하세요."
                 n !in 1..9999 -> "인쇄 매수를 1 이상으로 입력하세요."
                 badFit != null -> "인쇄 영역 ${badFit + 1}에 내용이 들어가지 않습니다. '라벨 설정'에서 영역을 키우거나 내용을 줄이세요."
                 else -> ""

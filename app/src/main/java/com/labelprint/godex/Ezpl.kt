@@ -123,6 +123,7 @@ object Ezpl {
     /** 다른 라벨의 크기·방향·인쇄 영역·글자 설정을 가져온다. 이름과 사진은 그대로 둔다. */
     fun copySettings(to: LabelTemplate, from: LabelTemplate): LabelTemplate = to.copy(
         widthMm = from.widthMm, lengthMm = from.lengthMm, gapMm = from.gapMm, rotation = from.rotation,
+        upsideDown = from.upsideDown, printOffsetXmm = from.printOffsetXmm, printOffsetYmm = from.printOffsetYmm,
         areas = from.areas, options = from.options,
     )
 
@@ -294,9 +295,21 @@ object Ezpl {
         val wd = dots(t.widthMm, dpi)
         val ld = dots(t.lengthMm, dpi)
         return Placement(
-            (r.l * wd).roundToInt(), (r.t * ld).roundToInt(),
+            (r.l * wd).roundToInt() + dots(t.printOffsetXmm, dpi),
+            (r.t * ld).roundToInt() + dots(t.printOffsetYmm, dpi),
             (r.w * wd).roundToInt().coerceAtLeast(8), (r.h * ld).roundToInt().coerceAtLeast(8),
         )
+    }
+
+    /** 회전 후 위치 보정으로 영역이 용지 밖으로 나가는지 확인한다. */
+    fun printAreaProblem(t: LabelTemplate, a: PrintArea, dpi: Int): String? {
+        areaProblem(t, a)?.let { return it }
+        if (!t.printOffsetXmm.isFinite() || !t.printOffsetYmm.isFinite()) return "위치 보정값을 확인하세요."
+        val p = areaPlacement(t, a, dpi)
+        return if (p.x < 0 || p.y < 0 || p.x.toLong() + p.w > dots(t.widthMm, dpi).toLong() + 1 ||
+            p.y.toLong() + p.h > dots(t.lengthMm, dpi).toLong() + 1) {
+            "위치 보정으로 인쇄 영역이 라벨 밖으로 나갑니다. 보정값을 줄이거나 영역을 줄이세요."
+        } else null
     }
 
     /** 사진을 시계 방향으로 deg만큼 돌렸을 때의 좌표. */

@@ -167,6 +167,7 @@ object Imaging {
         val graphics = t.areas.mapNotNull { a ->
             val lines = Ezpl.areaLines(a, batch, mfg, bb, t.options, t.picks)
             if (lines.isEmpty()) return@mapNotNull null
+            require(Ezpl.printAreaProblem(t, a, s.dpi) == null) { "위치 보정 후 인쇄 영역이 라벨 밖으로 나갑니다." }
             val rotated = rotate(renderArea(t, a, lines, s.dpi).bmp, t.rotation)
             val p = Ezpl.areaPlacement(t, a, s.dpi)
             val px = IntArray(rotated.width * rotated.height)
@@ -181,8 +182,8 @@ object Imaging {
     class LabelPreview(val bmp: Bitmap, val areas: List<Rendered?>)
 
     /** 입력한 라벨 크기대로 흰 종이를 그리고 그 위에 각 영역과 인쇄될 글자를 놓는다. */
-    fun previewLabel(t: LabelTemplate, batch: String, mfg: String, bb: String, dpi: Int): LabelPreview {
-        val (dw, dh) = Ezpl.designSize(t)
+    fun previewLabel(t: LabelTemplate, batch: String, mfg: String, bb: String, dpi: Int, printerView: Boolean = false): LabelPreview {
+        val (dw, dh) = if (printerView) t.widthMm to t.lengthMm else Ezpl.designSize(t)
         val scale = minOf(dpi / 25.4f, 1400f / max(dw, dh).coerceAtLeast(1f))
         val bmp = Bitmap.createBitmap(
             (dw * scale).toInt().coerceAtLeast(20), (dh * scale).toInt().coerceAtLeast(20), Bitmap.Config.ARGB_8888,
@@ -193,10 +194,18 @@ object Imaging {
         val num = Paint().apply { color = Color.RED; isAntiAlias = true; textSize = max(14f, scale * 2.5f) }
         val draw = Paint().apply { isFilterBitmap = true }
         val out = t.areas.mapIndexed { i, a ->
-            val dst = RectF(a.xMm * scale, a.yMm * scale, (a.xMm + a.wMm) * scale, (a.yMm + a.hMm) * scale)
+            val dst = if (printerView) {
+                val p = Ezpl.areaPlacement(t, a, dpi)
+                val dotScale = scale * 25.4f / dpi
+                RectF(p.x * dotScale, p.y * dotScale, (p.x + p.w) * dotScale, (p.y + p.h) * dotScale)
+            } else RectF(a.xMm * scale, a.yMm * scale, (a.xMm + a.wMm) * scale, (a.yMm + a.hMm) * scale)
             val lines = Ezpl.areaLines(a, batch, mfg, bb, t.options, t.picks)
             val r = if (lines.isEmpty() || a.wMm <= 0f || a.hMm <= 0f) null else renderArea(t, a, lines, dpi)
-            if (r != null) c.drawBitmap(r.bmp, null, dst, draw)
+            if (r != null) {
+                val image = if (printerView) rotate(r.bmp, Ezpl.printRotation(t)) else r.bmp
+                c.drawBitmap(image, null, dst, draw)
+                if (image !== r.bmp) image.recycle()
+            }
             c.drawRect(dst, box)
             val ny = if (dst.top > num.textSize + 2f) dst.top - 3f else dst.bottom + num.textSize
             c.drawText("${i + 1}", dst.left, ny, num)
