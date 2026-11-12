@@ -1,0 +1,13 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+operator_printer,Label printer read,model_nzqb_label_printer,group_label_operator,1,0,0,0
+manager_printer,Label printer manage,model_nzqb_label_printer,group_label_manager,1,1,1,0
+agent_printer,Assigned printer read,model_nzqb_label_printer,group_label_agent,1,0,0,0
+operator_template,Label template read,model_nzqb_label_template,group_label_operator,1,0,0,0
+manager_template,Label template manage,model_nzqb_label_template,group_label_manager,1,1,1,0
+operator_area,Label area read,model_nzqb_label_area,group_label_operator,1,0,0,0
+manager_area,Label area manage,model_nzqb_label_area,group_label_manager,1,1,1,1
+operator_batch,Label batch save,model_nzqb_label_batch,group_label_operator,1,1,1,0
+operator_phrase,Label phrase manage,model_nzqb_label_phrase,group_label_operator,1,1,1,0
+operator_job,Label job request,model_nzqb_label_job,group_label_operator,1,1,1,0
+agent_job,Assigned job read,model_nzqb_label_job,group_label_agent,1,0,0,0
+operator_lot_read,Read lot for label,stock.model_stock_lot,group_label_operator,1,0,0,0

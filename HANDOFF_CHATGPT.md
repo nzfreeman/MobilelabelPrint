@@ -4,6 +4,16 @@
 
 ## 최신 상태: v1.10 (2026-11-12, 아래 과거 기록보다 우선)
 
+### Odoo 연동 작업 (2026-11-12)
+
+- 사용자가 Odoo 웹 인쇄 대기열 + 작업장 PC 연결 프로그램 방식으로 진행하라고 승인함. 서버는 Oracle `192.9.188.221`, SSH `ubuntu`, 도메인 `odoo.nzqueenbee.com`, Odoo19 Docker, 운영 DB `nzqb-odoo`, 소스 `/home/ubuntu/odoo-docker/odoo19/custom-addons`.
+- 기존 `godex_label_printer`는 ZPL용이며 4건 이력이 있어 변경하지 않음. 새 EZPL 모듈 `odoo/addons/nzqb_label_print`와 표준 Python PC 연결 프로그램 `odoo/agent/nzqb_print_agent.py` 작성.
+- 서버 별도 DB `nzqb_label_validation_20261112` 설치/통합 6개 + 그림/연결 프로그램 8개 테스트 통과. PC→프린터 `192.168.68.55:9100` 연결 확인(데이터 전송 없음). Windows Python은 `C:/Users/GGPC/AppData/Local/Microsoft/WindowsApps/PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0/python.exe`.
+- **운영 설치는 자동 승인 검토에 의해 거절됨.** 운영 DB 변경 및 전용 계정/API 키 발급에 명시적 사용자 승인이 필요하다는 이유. 우회 금지. 사용자에게 `odoo/INSTALL_REVIEW.md` 내용의 운영 설치+전용 계정/1년 키+Windows 자동 시작 등록을 승인받은 뒤 진행할 것.
+- 새 모듈 소스는 서버 경로에 복사되었으나 운영 DB에는 설치되지 않음. 테스트 DB만 변경됨. `odoo/ops/install_production.py`는 운영 백업/설치 준비 스크립트, `provision_agent.py`는 Odoo shell에서 실행하는 계정/키 설정 스크립트이며 아직 실행하지 않음. 비밀키를 출력/커밋/공유하지 말 것. `config.json`과 `state/`는 Git 제외.
+- 브라우저 UI는 로그인 화면까지 확인. 사용자가 지금 로그인하겠다고 응답했으며 실제 로그인 완료/모듈 화면은 확인 전. 실제 시험 출력도 아직 하지 않음.
+- 자세한 기능/시험/남은 작업은 `odoo/README.md`, `odoo/TEST_RESULTS.md`, `odoo/INSTALL_REVIEW.md` 참고.
+
 - 사용자가 v1.9 거꾸로 인쇄 적용 시 인쇄됨을 확인. Windows 설정 사진은 용지 폭47mm/길이300mm, Portrait 180°. 앱에서 전체 인쇄 위치를 이동하도록 요청.
 - v1.10: `LabelTemplate.printOffsetXmm/printOffsetYmm` 기본0. 인쇄 화면에서 0.1/0.5/1mm 화살표 이동 또는 부호 있는 mm 직접 입력, 즉시 라벨별 저장/초기화. 회전 후 프린터 좌표(미리보기 기준 오른쪽/아래가 양수)에 더함. 미리보기도 동일한 `areaPlacement`를 사용. 영역 밖으로 벗어나면 인쇄 차단. 기존 라벨 설정 복사 시 거꾸로 옵션과 보정값도 복사함.
 

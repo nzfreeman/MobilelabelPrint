@@ -1,0 +1,25 @@
+<odoo>
+    <record id="group_label_operator" model="res.groups">
+        <field name="name">라벨 인쇄 사용자</field>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+    <record id="group_label_manager" model="res.groups">
+        <field name="name">라벨 인쇄 관리자</field>
+        <field name="implied_ids" eval="[(4, ref('group_label_operator'))]"/>
+    </record>
+    <record id="group_label_agent" model="res.groups">
+        <field name="name">라벨 연결 프로그램 (전용 계정)</field>
+        <field name="implied_ids" eval="[(5,0,0)]"/>
+    </record>
+    <record id="base.group_system" model="res.groups"><field name="implied_ids" eval="[(4,ref('group_label_manager'))]"/></record>
+    <record id="rule_printer_company" model="ir.rule"><field name="name">Label printers: company</field><field name="model_id" ref="model_nzqb_label_printer"/><field name="domain_force">[('company_id','in',company_ids)]</field></record>
+    <record id="rule_template_company" model="ir.rule"><field name="name">Label templates: company</field><field name="model_id" ref="model_nzqb_label_template"/><field name="domain_force">[('company_id','in',company_ids)]</field></record>
+    <record id="rule_area_company" model="ir.rule"><field name="name">Label areas: company</field><field name="model_id" ref="model_nzqb_label_area"/><field name="domain_force">[('company_id','in',company_ids)]</field></record>
+    <record id="rule_batch_company" model="ir.rule"><field name="name">Label batches: company</field><field name="model_id" ref="model_nzqb_label_batch"/><field name="domain_force">[('company_id','in',company_ids)]</field></record>
+    <record id="rule_phrase_company" model="ir.rule"><field name="name">Label phrases: company</field><field name="model_id" ref="model_nzqb_label_phrase"/><field name="domain_force">[('company_id','in',company_ids)]</field></record>
+    <record id="rule_job_company" model="ir.rule"><field name="name">Label jobs: company</field><field name="model_id" ref="model_nzqb_label_job"/><field name="domain_force">[('company_id','in',company_ids)]</field></record>
+    <record id="rule_operator_jobs" model="ir.rule"><field name="name">Label operator jobs</field><field name="model_id" ref="model_nzqb_label_job"/><field name="groups" eval="[(4,ref('group_label_operator'))]"/><field name="domain_force">[(1,'=',1)]</field></record>
+    <record id="rule_operator_printers" model="ir.rule"><field name="name">Label operator printers</field><field name="model_id" ref="model_nzqb_label_printer"/><field name="groups" eval="[(4,ref('group_label_operator'))]"/><field name="domain_force">[(1,'=',1)]</field></record>
+    <record id="rule_agent_jobs" model="ir.rule"><field name="name">Only assigned printer jobs</field><field name="model_id" ref="model_nzqb_label_job"/><field name="groups" eval="[(4,ref('group_label_agent'))]"/><field name="domain_force">[('printer_id.agent_user_id','=',user.id)]</field></record>
+    <record id="rule_agent_printers" model="ir.rule"><field name="name">Only assigned printers</field><field name="model_id" ref="model_nzqb_label_printer"/><field name="groups" eval="[(4,ref('group_label_agent'))]"/><field name="domain_force">[('agent_user_id','=',user.id)]</field></record>
+</odoo>

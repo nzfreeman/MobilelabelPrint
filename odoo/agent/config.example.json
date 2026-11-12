@@ -1,0 +1,11 @@
+{
+  "url": "https://odoo.nzqueenbee.com",
+  "database": "nzqb-odoo",
+  "uid": 0,
+  "api_key": "REPLACE_WITH_DEDICATED_AGENT_KEY",
+  "printer_id": 0,
+  "agent_name": "NZQueenBee-Workshop",
+  "allowed_hosts": ["192.168.68.55"],
+  "allowed_ports": [9100],
+  "poll_seconds": 5
+}

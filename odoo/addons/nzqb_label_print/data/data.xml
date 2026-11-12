@@ -1,0 +1,3 @@
+<odoo noupdate="1">
+    <record id="sequence_label_job" model="ir.sequence"><field name="name">Label print requests</field><field name="code">nzqb.label.job</field><field name="prefix">LBL/</field><field name="padding">6</field><field name="company_id" eval="False"/></record>
+</odoo>

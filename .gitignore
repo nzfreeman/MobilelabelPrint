@@ -10,3 +10,10 @@ local.properties
 captures/
 .externalNativeBuild/
 .cxx/
+__pycache__/
+*.pyc
+odoo/agent/config.json
+odoo/agent/state/
+odoo/ops/private/
+odoo/*.zip
+odoo/addons/godex_label_printer/
