@@ -157,7 +157,7 @@ internal fun EditScreen(
             "라벨 한 장을 글자가 바로 보이게 놓았을 때의 실제 크기를 자로 재서 넣으세요. 간격은 라벨과 라벨 사이의 빈 띠입니다.",
             style = MaterialTheme.typography.bodySmall,
         )
-        Text("프린터에서 먼저 나오는 쪽", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+        Text("라벨 글자가 똑바로 보이게 놓았을 때, 프린터에서 먼저 나오는 변", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
         Chips(listOf(0 to "위쪽", 90 to "왼쪽", 180 to "아래쪽", 270 to "오른쪽"), t.rotation) { r ->
             val (w, h) = Ezpl.designSize(t)
             t = Ezpl.withDesignSize(t, w, h, r)

@@ -226,6 +226,36 @@ class EzplTest {
     }
 
     @Test
+    fun upsideDownChangesRasterAndJobBytesBeforeBytePadding() {
+        val black = 0xff000000.toInt()
+        val white = 0xffffffff.toInt()
+        val pixels = intArrayOf(black, white, white, white, black, white)
+        val (normal, wb) = Ezpl.pack(pixels, 3, 2, invert = false)
+        val (flipped, flippedWb) = Ezpl.pack(pixels, 3, 2, invert = false, upsideDown = true)
+        assertEquals(wb, flippedWb)
+        assertArrayEquals(byteArrayOf(0x80.toByte(), 0x40), normal)
+        assertArrayEquals(byteArrayOf(0x40, 0x20), flipped)
+        val t = LabelTemplate(id = "a", name = "a", imagePath = "")
+        val first = Ezpl.job(t, PrinterSettings(), 0, 0, normal, wb, 2, 1)
+        val second = Ezpl.job(t.copy(upsideDown = true), PrinterSettings(), 0, 0, flipped, wb, 2, 1)
+        assertFalse(first.contentEquals(second))
+    }
+
+    @Test
+    fun upsideDownMirrors300By47PlacementForEveryFeedEdge() {
+        for (rotation in listOf(0, 90, 180, 270)) {
+            val t = Ezpl.withDesignSize(LabelTemplate(id = "a", name = "a", imagePath = ""), 300f, 47f, rotation)
+            val a = PrintArea(xMm = 35f, yMm = 4f, wMm = 60f, hMm = 12f)
+            val p = Ezpl.areaPlacement(t, a, 300)
+            val flipped = Ezpl.areaPlacement(t.copy(upsideDown = true), a, 300)
+            assertEquals(p.w, flipped.w)
+            assertEquals(p.h, flipped.h)
+            assertEquals(Ezpl.dots(t.widthMm, 300).toFloat(), (p.x + flipped.x + p.w).toFloat(), 1f)
+            assertEquals(Ezpl.dots(t.lengthMm, 300).toFloat(), (p.y + flipped.y + p.h).toFloat(), 1f)
+        }
+    }
+
+    @Test
     fun jobWithTwoAreasHasTwoGraphics() {
         val t = LabelTemplate(id = "a", name = "a", imagePath = "")
         val job = Ezpl.job(

@@ -167,11 +167,11 @@ object Imaging {
         val graphics = t.areas.mapNotNull { a ->
             val lines = Ezpl.areaLines(a, batch, mfg, bb, t.options, t.picks)
             if (lines.isEmpty()) return@mapNotNull null
-            val rotated = rotate(renderArea(t, a, lines, s.dpi).bmp, Ezpl.printRotation(t))
+            val rotated = rotate(renderArea(t, a, lines, s.dpi).bmp, t.rotation)
             val p = Ezpl.areaPlacement(t, a, s.dpi)
             val px = IntArray(rotated.width * rotated.height)
             rotated.getPixels(px, 0, rotated.width, 0, 0, rotated.width, rotated.height)
-            val (data, wb) = Ezpl.pack(px, rotated.width, rotated.height, s.invertBitmap)
+            val (data, wb) = Ezpl.pack(px, rotated.width, rotated.height, s.invertBitmap, t.upsideDown)
             Ezpl.Graphic(p.x, p.y, data, wb, rotated.height)
         }
         return Ezpl.job(t, s, graphics, count)

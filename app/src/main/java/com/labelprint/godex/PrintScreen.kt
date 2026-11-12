@@ -325,9 +325,18 @@ internal fun PrintScreen(
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Header(t.name, onBack = onBack, action = { TextButton(onClick = onEditArea) { Text("라벨 설정") } })
+        Text("앱 버전 ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
+        Check("거꾸로 인쇄 (180° 회전 · 즉시 저장)", t.upsideDown, enabled = !busy) { v ->
+            onTemplate(t.copy(upsideDown = v))
+        }
+        Text(
+            "출력 방향: ${if (t.upsideDown) "거꾸로" else "기본"} · 미리보기의 위쪽이 먼저 나옵니다.",
+            style = MaterialTheme.typography.bodySmall,
+        )
         preview?.let { p ->
+            val feedPreview = remember(p.bmp, t.rotation, t.upsideDown) { Imaging.rotate(p.bmp, Ezpl.printRotation(t)) }
             Image(
-                p.bmp.asImageBitmap(), contentDescription = "인쇄 미리보기",
+                feedPreview.asImageBitmap(), contentDescription = "용지 진행 방향 기준 인쇄 미리보기 (위쪽이 먼저 나옴)",
                 modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp), contentScale = ContentScale.Fit,
             )
         }
@@ -495,7 +504,11 @@ internal fun PrintScreen(
                             } else if (st.isNotBlank() && !Ezpl.isOk(st)) {
                                 "프린터 상태: ${Ezpl.statusText(st)}. 인쇄하지 않았습니다."
                             } else {
-                                PrinterClient.send(settings.ip, settings.port, Imaging.buildJob(pt, settings, batch, mfg, bb, n))
+                                val job = Imaging.buildJob(pt, settings, batch, mfg, bb, n)
+                                val fingerprint = java.security.MessageDigest.getInstance("SHA-256")
+                                    .digest(job).take(6).joinToString("") { "%02x".format(it.toInt() and 255) }
+                                val direction = "${if (pt.upsideDown) "거꾸로" else "기본"} (${Ezpl.printRotation(pt)}°), 데이터 $fingerprint"
+                                PrinterClient.send(settings.ip, settings.port, job)
                                 sentAt = System.currentTimeMillis()
                                 // 인쇄 중(50)·처리 중(60)에는 묻지 않고, 다 찍을 만큼 기다린 뒤 확인한다.
                                 val perLabelMs = ((t.lengthMm + t.gapMm) / (settings.speed.coerceIn(2, 7) * 25.4f) * 1000).toLong()
@@ -506,11 +519,11 @@ internal fun PrintScreen(
                                     Thread.sleep(2000); tries++
                                     after = try { PrinterClient.status(settings) } catch (e: Exception) { "" }
                                 }
-                                state = "보낸 뒤 프린터 상태: ${Ezpl.statusText(after)}"
+                                state = "출력 방향: $direction. 보낸 뒤 프린터 상태: ${Ezpl.statusText(after)}"
                                 if (after.isNotBlank() && !Ezpl.isOk(after)) {
-                                    "${n}장을 보냈지만 프린터가 오류 상태입니다: ${Ezpl.statusText(after)}"
+                                    "${n}장을 보냈지만 프린터가 오류 상태입니다: ${Ezpl.statusText(after)}. $direction"
                                 } else {
-                                    "${n}장을 프린터로 보냈습니다. (프린터 상태: ${Ezpl.statusText(after)})"
+                                    "${n}장을 프린터로 보냈습니다. (프린터 상태: ${Ezpl.statusText(after)}). $direction"
                                 }
                             }
                         } catch (e: Exception) {

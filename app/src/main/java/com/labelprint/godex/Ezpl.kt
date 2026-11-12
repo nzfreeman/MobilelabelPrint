@@ -327,12 +327,14 @@ object Ezpl {
      * ARGB 픽셀을 1bpp로 묶는다. 어두운 픽셀이 1(인쇄).
      * @return (데이터, 한 줄의 바이트 수)
      */
-    fun pack(pixels: IntArray, width: Int, height: Int, invert: Boolean): Pair<ByteArray, Int> {
+    fun pack(pixels: IntArray, width: Int, height: Int, invert: Boolean, upsideDown: Boolean = false): Pair<ByteArray, Int> {
         val wb = (width + 7) / 8
         val out = ByteArray(wb * height)
         for (y in 0 until height) {
             for (x in 0 until width) {
-                val p = pixels[y * width + x]
+                // Reverse both axes in the final raster, before padding each row to whole bytes.
+                val source = if (upsideDown) (height - 1 - y) * width + width - 1 - x else y * width + x
+                val p = pixels[source]
                 val a = (p ushr 24) and 0xff
                 val lum = (((p shr 16) and 0xff) * 299 + ((p shr 8) and 0xff) * 587 + (p and 0xff) * 114) / 1000
                 var black = a > 127 && lum < 128
